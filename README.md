@@ -23,3 +23,8 @@ The scripts that run the animations on konpo.studio, owned by Konpo. bear.plus b
 4. In Webflow, update the script tag (Site settings → Custom code → Footer, or the page's own code for `ads.js`) with the new URL and `integrity="sha384-…" crossorigin="anonymous"`. Publish to staging, test, then publish to konpo.studio.
 
 Rolling back is the same in reverse: point the tag back at the previous version and publish.
+
+## Releases
+
+- **v1.1.0**: Home reveal from the loader into the three hero cards is smoother. The last loader image now hands over to the real card while it's still gliding in (under a pixel left to travel), and the cards start moving straight away instead of after a 0.3 to 0.45s pause. Their position, width and height share one ease that starts from rest and lands like the loader does, where before they jumped off at full speed and the width and height stopped dead. Changed in `dist/konpo-min.js` as a minimal patch to the v1.0.0 build, with the same change written into `src/konpo.js`. Nothing else differs.
+- **v1.0.0**: bear.plus's scripts as they were live on 19 Oct 2026.

@@ -1771,7 +1771,8 @@ const mainScript = () => {
                     let childTl = gsap.timeline({
                         onComplete: () => {
                             $('.main-grid').addClass('loaded')
-                            allowAnim = true;
+                            // 2: landed, so homeHero() builds its timeline now (paused) and the handoff below plays it
+                            if (!allowAnim) allowAnim = 2;
                             gsap.to('.header', {autoAlpha: 1, duration: .8, onComplete: () => {
                                 lenis.start()
 
@@ -1793,6 +1794,15 @@ const mainScript = () => {
                         x: distanceX,
                         y: distanceY
                     }, '>=0')
+                    // Hand over to the real cards while the last image is still gliding in (under 1px to go),
+                    // so the cards carry the motion on instead of starting after a pause
+                    if (idx == $('.loader-img-inner').length - 1) {
+                        childTl.call(() => {
+                            $('.loader').remove()
+                            allowAnim = 3;
+                            gsap.getById('kpHero') && gsap.getById('kpHero').play()
+                        }, null, '>-.2')
+                    }
                 })
             }
         }, '0');
@@ -2444,10 +2454,15 @@ const mainScript = () => {
                 gsap.set(homeHeroSub.words, {yPercent: 100})
 
                 gsap.set('.home-hero-client-item-label, .home-hero-client-item-title', {autoAlpha: 0})
+                // Card glide: starts from rest and lands with the same quintic tail as the loader's power4.out
+                const glide = q => 1 - Math.pow(1 - q, 5) * (1 + 5 * q)
                 function checkToStart() {
                     if (allowAnim) {
                         let tl = gsap.timeline({
-                            scrollTrigger: {
+                            // After the loader (allowAnim 2 or 3) the loader handoff starts it, not ScrollTrigger (which ran ~250ms late)
+                            id: 'kpHero',
+                            paused: allowAnim === 2,
+                            scrollTrigger: allowAnim > 1 ? undefined : {
                                 trigger: '.home-hero',
                                 start: 'top top+=50%',
                             },
@@ -2469,7 +2484,7 @@ const mainScript = () => {
                                 homeHeroSub.revert()
                                 homeHeroCap.revert()
                             },
-                            delay: comingToHome ? delayTime : $('.home-hero-thumb').length > 0 ? 0 : .8
+                            delay: comingToHome ? delayTime : $('.home-hero-thumb').length > 0 || allowAnim > 1 ? 0 : .8
                         })
 
                         if ($(window).width() > 767) {
@@ -2480,7 +2495,7 @@ const mainScript = () => {
                         .to(homeHeroTitle.words, {yPercent: 0, duration: .6, stagger: .03})
                         .fromTo('.home-hero-title .txt-disable', {'--line-scaleX': 0 }, {'--line-scaleX': 1, duration: 1 }, "<=.3")
 
-                        .to('.home-hero-client-item-inner', {'transition-property': 'none', clearProps: 'transition-property', x: 0, duration: .88, ease: 'power2.out'}, 0)
+                        .to('.home-hero-client-item-inner', {'transition-property': 'none', clearProps: 'transition-property', x: 0, duration: 1.3, ease: glide}, 0)
                         .to('.home-hero-client-item-label', {autoAlpha: 1, duration: .6, stagger: .03}, '<=0.2')
                         .to('.home-hero-client-item-title', {autoAlpha: 1, duration: .6, stagger: .03, onComplete: () => {
                             gsap.set('.home-hero-client-inner', {clearProps: 'all'})
@@ -2493,8 +2508,8 @@ const mainScript = () => {
                         if ($(window).width() > 767) {
                             // Expand Clien News card
                             tl
-                            .to('.home-hero-client-item', { width: 100/3+'%', ease: 'none', duration: 1}, 0)
-                            .to('.home-hero-client-cms', {y: 0, height: $('.home-hero-client-cms-wrap').get(0).getBoundingClientRect().height, ease: 'none', duration: 1}, 0)
+                            .to('.home-hero-client-item', { width: 100/3+'%', ease: glide, duration: 1.3}, 0)
+                            .to('.home-hero-client-cms', {y: 0, height: $('.home-hero-client-cms-wrap').get(0).getBoundingClientRect().height, ease: glide, duration: 1.3}, 0)
                             .fromTo('.home-hero-client-item-logo', { autoAlpha: 0 }, { autoAlpha: 1, duration: .6, ease: 'none' }, .4)
                         }
                         if (!comingToHome) {
