@@ -1,3 +1,33 @@
+// Letter-level splits put every letter in its own box, so screen readers and AI agents read "S e r v i c e s".
+// After each split, hide the letters from them and give each word one visually hidden copy of its text.
+// Words that contain a link or other focusable element are left alone, so nothing focusable ends up hidden.
+function kpSplitA11y(split) {
+    try {
+        if (!split || !split.chars || !split.chars.length || !split.words) return;
+        split.words.forEach((word) => {
+            if (!word || word.querySelector('.kp-sr') || word.querySelector('a,button,input,select,textarea,[tabindex]')) return;
+            const text = word.textContent;
+            if (!text || !text.trim()) return;
+            for (let c = word.firstElementChild; c; c = c.nextElementSibling) c.setAttribute('aria-hidden', 'true');
+            const copy = document.createElement('span');
+            copy.className = 'kp-sr';
+            copy.textContent = text;
+            copy.style.cssText = 'position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap';
+            word.appendChild(copy);
+        });
+    } catch (e) {}
+}
+// Every `new SplitText(...)` below goes through this wrapper, which runs kpSplitA11y on the result.
+function kpWrapSplit() {
+    const Original = window.SplitText;
+    if (!Original || Original.__kpWrapped) return;
+    function Wrapped(target, opts) { const split = new Original(target, opts); kpSplitA11y(split); return split; }
+    Wrapped.prototype = Original.prototype;
+    Object.setPrototypeOf(Wrapped, Original);
+    Wrapped.__kpWrapped = true;
+    window.SplitText = Wrapped;
+}
+
 const mainScript = () => {
     function isVideoPlaying(video) {
         return video && !video.paused && !video.ended && video.currentTime > 0 && video.readyState > 2;
@@ -7,6 +37,7 @@ const mainScript = () => {
 
     barba.use(barbaPrefetch);
     gsap.registerPlugin(ScrollTrigger, SplitText);
+    kpWrapSplit();
     gsap.config({ nullTargetWarn: false });
 
     const isStaging = window.location.href.indexOf('webflow') > -1 ? true : false
@@ -2975,7 +3006,7 @@ const mainScript = () => {
                         }
                         items.each((idx, el) => {
                             let cloneItem = $(el).find('.home-client-marquee-cms').eq(0).clone();
-                            cloneItem.clone().appendTo(el)
+                            cloneItem.clone().attr('aria-hidden', 'true').appendTo(el)
                             requestAnimationFrame(() => {
                                 let tlDur = Math.floor($(el).find('.home-client-marquee-cms').eq(0).width() / speed)
                                 $(el).find('.home-client-marquee-cms').css('--marqueeDur', `${tlDur}s`)
@@ -3285,7 +3316,7 @@ const mainScript = () => {
                 let cloneItem = barbaData.find('.abt-marquee-item').eq(0).clone();
                 let cloneTime = Math.ceil(barbaData.find('.abt-marquee-inner').width() / barbaData.find('.abt-marquee-item').width());
                 for (let i = 0; i < cloneTime; i++) {
-                    cloneItem.clone().appendTo(barbaData.find('.abt-marquee-inner'))
+                    cloneItem.clone().attr('aria-hidden', 'true').appendTo(barbaData.find('.abt-marquee-inner'))
                 }
                 let tlDur = 30;
                 requestAnimationFrame(() => {
@@ -4148,7 +4179,8 @@ const mainScript = () => {
                         let cloneItem = $(data.next.container).find('.ser-marquee-item').eq(0).clone();
                         let cloneTime = Math.ceil($(data.next.container).find('.ser-marquee-inner').width() / $(data.next.container).find('.ser-marquee-item').width()) + 1;
                         for (let i = 0; i < cloneTime; i++) {
-                            cloneItem.clone().appendTo($(data.next.container).find('.ser-marquee-inner'))
+                            // copies are decoration, so hide them from screen readers and agents (the item holds the page's H1)
+                            cloneItem.clone().attr('aria-hidden', 'true').appendTo($(data.next.container).find('.ser-marquee-inner'))
                         }
                         let tlDur = 30;
                         let tlMarquee = gsap.timeline({
