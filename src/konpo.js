@@ -2877,9 +2877,9 @@ const mainScript = () => {
                         requestAnimationFrame(() => {
                             allLotties.each(function(idx, el) {
                                 let src = $(el).attr('data-srcUrl')
-                                // The player script loads after this one, so wait for <dotlottie-player> to be defined
+                                // The player script loads after this one, so wait for <dotlottie-player> to be defined and rendered
                                 // (a reload that lands mid-page fires this trigger before it is)
-                                customElements.whenDefined('dotlottie-player').then(() => $(el).get(0).load(src)).then(() => {
+                                customElements.whenDefined('dotlottie-player').then(() => $(el).get(0).updateComplete).then(() => $(el).get(0).load(src)).then(() => {
                                     // if ($(window).width() < 767) {
                                     //     if (idx == 3) {
                                     //         $(el).get(0).seek('55%');
@@ -4377,7 +4377,7 @@ const mainScript = () => {
                         requestAnimationFrame(() => {
                             allLotties.each(function(idx, el) {
                                 let src = $(el).attr('data-srcUrl')
-                                customElements.whenDefined('dotlottie-player').then(() => $(el).get(0).load(src)).then((e) => {
+                                customElements.whenDefined('dotlottie-player').then(() => $(el).get(0).updateComplete).then(() => $(el).get(0).load(src)).then((e) => {
                                     $(el).get(0).play()
                                 })
                                 // $(data.next.container).find('.ser-fea-imgs-item.force-1-1').addClass('active')

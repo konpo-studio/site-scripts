@@ -26,6 +26,7 @@ Rolling back is the same in reverse: point the tag back at the previous version 
 
 ## Releases
 
+- **v1.4.4**: v1.4.3 waited for the player to be defined but not for its first render, so after a mid-page reload the Lotties said "playing" and drew nothing. They now also wait for the player's `updateComplete`. Roll back to v1.4.2 (v1.4.3 was never live).
 - **v1.4.3**: the Home and services Lotties wait for the Lottie player to be ready. The player script loads after konpo-min, so a reload that lands mid-page (the browser restores the scroll position) started them too early, threw "load is not a function" and left them blank. Built on v1.4.2, so it doesn't include v1.5.0's About changes. Roll back to v1.4.2.
 - **v1.4.2**: the summary toggle margin only counts the FAQ when it's showing. Flair has no FAQs, so its section is hidden, but jQuery still measured it (about 420px) and the toggle stopped early there. Roll back to v1.4.1.
 - **v1.4.1**: case-study FAQs. The FAQ section on case studies opens and closes like the services one, and it now sits at the very bottom of the page, below the next-project hero. Going to the next project moves and fades the FAQ along with the hero, CTA and testimonial, and the summary toggle in the side rail still stops above the CTA (its bottom margin counts the FAQ, and is measured again after an answer opens or closes). Roll back to v1.4.0 (same footer, only the konpo-min tag changes; the case FAQ answers then won't open).
