@@ -155,10 +155,20 @@ const mainScript = () => {
     };
 
     // Utils vars
+    // SplitText 3.13+ defaults differ from the 3.9 build this was written for, so keep the 3.9 behaviour:
+    // no aria-label/aria-hidden (they hide links from screen readers), nested elements stay whole instead of
+    // being sliced per line, and a single &nbsp; stays inside its word (3.13+ makes every whitespace run breakable)
+    const splitBase = {
+        linesClass: 'g-lines',
+        aria: 'none',
+        deepSlice: false,
+        reduceWhiteSpace: false,
+        prepareText: (text) => text.replace(/\s\s+/g, ' ').replace(/\r|\n|\t\t/g, '')
+    };
     let typeOpts = {
-        lines: { type: 'lines', linesClass: 'g-lines'},
-        words: { type: 'words,lines', linesClass: 'g-lines'},
-        chars: { type: 'chars,words,lines', linesClass: 'g-lines'}
+        lines: { type: 'lines', ...splitBase},
+        words: { type: 'words,lines', ...splitBase},
+        chars: { type: 'chars,words,lines', ...splitBase}
     };
     let gOpts = {
         ease: 'power2.easeOut',
@@ -2918,6 +2928,8 @@ const mainScript = () => {
                     if (homeProjTxt.length >= 1) {
                         homeProjTxt.each((index, el) => {
                             let txt = new SplitText($(el).find('.txt'), typeOpts.words);
+                            // 3.13+ puts the cursor dot inside the "View project" text line (3.9 gave it its own line); move it back to the link
+                            $(el).find('.g-lines > .btn-dot').each((i, dot) => dot.parentNode.parentNode.appendChild(dot))
 
                             let tlHomeProjTxt = gsap.timeline({
                                 scrollTrigger: {
@@ -3295,7 +3307,7 @@ const mainScript = () => {
                             },
                         })
                         if ($(window).width() >= 768) {
-                            const marqueeTxt = new SplitText(barbaData.find('.abt-team-marquee .abt-marquee-item .abt-marquee-item-heading'), {type: 'chars,words,lines'})
+                            const marqueeTxt = new SplitText(barbaData.find('.abt-team-marquee .abt-marquee-item .abt-marquee-item-heading'), {...typeOpts.chars, linesClass: ''})
                             const titleTxt = new SplitText(barbaData.find('.abt-team .abt-team-sub-title'), typeOpts.words)
 
                             tl
@@ -3307,7 +3319,7 @@ const mainScript = () => {
                             .from(titleTxt.words, {
                                 onComplete: () => {
                                     titleTxt.revert()
-                                    new SplitText(barbaData.find('.abt-team-marquee .abt-marquee-item .abt-marquee-item-heading'), {type: 'chars,words,lines'})
+                                    new SplitText(barbaData.find('.abt-team-marquee .abt-marquee-item .abt-marquee-item-heading'), {...typeOpts.chars, linesClass: ''})
                                 },
                                 yPercent: 60, autoAlpha: 0, stagger: .01, duration: .6, ease: gOpts.ease
                             }, '<=.4')
@@ -4031,6 +4043,8 @@ const mainScript = () => {
 
                         let richTxt = $(el).find('.projdtl-brand-rictxt p');
                         richTxt.each((idx, el) => {
+                            // CSS hides <br> in this rich text, but 3.13+ still starts a new line at each one
+                            $(el).find('br').filter((i, br) => getComputedStyle(br).display === 'none').remove()
                             const richTxtInner = new SplitText(el, typeOpts.words)
                             tlTxt
                             .from(richTxtInner.words, {
@@ -4058,11 +4072,13 @@ const mainScript = () => {
 
             function projdtlClientTesti(data) {
                 const parent = $(data.next.container).find('.projdtl-testi');
+                // Split the quote once: 3.13+ reverts an earlier split when the same element is split again
+                const testiMainParaColor = new SplitText(parent.find('.projdtl-testi-main-txt'), typeOpts.chars)
                 if ($(window).width() >= 768) {
                     const labelTesti = new SplitText(parent.find('.projdtl-intro-label'), typeOpts.chars);
                     const clientName = new SplitText(parent.find('.projdtl-testi-client-name'), typeOpts.chars);
                     const clientJob = new SplitText(parent.find('.projdtl-testi-client-job'), typeOpts.words);
-                    const testiMainPara = new SplitText(parent.find('.projdtl-testi-main-txt'), typeOpts.words)
+                    const testiMainPara = testiMainParaColor
 
                     let tl = gsap.timeline({
                         scrollTrigger: {
@@ -4079,7 +4095,6 @@ const mainScript = () => {
                     .from(clientJob.words, {yPercent: 60, autoAlpha: 0, duration: .4, stagger: .015, ease: gOpts.ease}, '<=.2')
                 }
 
-                const testiMainParaColor = new SplitText(parent.find('.projdtl-testi-main-txt'), typeOpts.chars)
                 let colorTl = gsap.timeline({
                     scrollTrigger: {
                         trigger: $(data.next.container).find('.projdtl-testi-main-txt'),
