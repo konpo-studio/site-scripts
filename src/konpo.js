@@ -1,3 +1,30 @@
+// About awards table: each row also holds copies that are hidden on desktop (the mobile award name, a CMS-hidden cell, the
+// mobile-only links). GSAP can't read a hidden element's transform, so when the reveal starts it would show each hidden letter,
+// move it to <html>, measure it and put it back (~0.3ms a letter, ~1,000 letters). A 0.01px transform set up front lets GSAP skip
+// that. Every letter stays in the stagger, so the timing and what's visible are unchanged. In dist/konpo-min.js this runs first
+// (prefixed), so kpWrapSplit below wraps it.
+(function kpAwardsSkipHidden() {
+    const Original = window.SplitText;
+    if (!Original || Original.__kpAwSkip) return;
+    function Wrapped(target, opts) {
+        const split = new Original(target, opts);
+        try {
+            const hidden = new Map();
+            [].concat(split.lines || [], split.words || [], split.chars || []).forEach((el) => {
+                const cell = el.closest && el.closest('.abt-award .abt-award-sub-item-txt');
+                if (!cell) return;
+                if (!hidden.has(cell)) hidden.set(cell, !cell.getClientRects().length);
+                if (hidden.get(cell)) el.style.transform = 'translate(0.01px,0px)';
+            });
+        } catch (e) {}
+        return split;
+    }
+    Wrapped.prototype = Original.prototype;
+    Object.setPrototypeOf(Wrapped, Original);
+    Wrapped.__kpAwSkip = 1;
+    window.SplitText = Wrapped;
+})();
+
 // Letter-level splits put every letter in its own box, so screen readers and AI agents read "S e r v i c e s".
 // After each split, hide the letters from them and give each word one visually hidden copy of its text.
 // Words that contain a link or other focusable element are left alone, so nothing focusable ends up hidden.
@@ -718,8 +745,11 @@ const mainScript = () => {
         })
     }
 
+    // The header height only changes on resize, so read it then instead of on every scroll frame.
+    let headerTopH = $('.header-top').height();
+    if ($('.header-top').length) new ResizeObserver(() => { headerTopH = $('.header-top').height() }).observe($('.header-top').get(0));
     lenis.on('scroll', function(inst) {
-        if (inst.scroll > $('.header-top').height() ) {
+        if (inst.scroll > headerTopH) {
             $('.header-top').addClass('on-scroll')
         } else {
             $('.header-top').removeClass('on-scroll')
@@ -1497,9 +1527,15 @@ const mainScript = () => {
             this.render.mouse = mouse;
         }
         startAnim() {
-            if ($('.abt-decor-canvas').length) {
+            const canvas = document.querySelector('.abt-decor-canvas');
+            if (canvas) {
                 this.Engine.update(this.engine, 1000 / 60)
-                this.Render.world(this.render);
+                // The physics keeps stepping every frame (same positions); drawing is skipped while the canvas is 200px+ off screen.
+                if (!canvas.__kpOff) this.Render.world(this.render);
+                if (!canvas.__kpIO) {
+                    canvas.__kpIO = 1;
+                    new IntersectionObserver((entries) => { canvas.__kpOff = !entries[entries.length - 1].isIntersecting }, { rootMargin: '200px 0px' }).observe(canvas);
+                }
                 requestAnimationFrame(this.startAnim.bind(this));
             } else {
             }
@@ -2384,11 +2420,13 @@ const mainScript = () => {
 
         function render() {
             let oldPos = mouse;
+            // One rect read per frame (was three): the ease below and the same on-screen test isInViewport() does.
+            const rect = canvas.getBoundingClientRect();
             mouse = {
-                x: lerp(oldPos.x, pointerCurr().x - canvas.getBoundingClientRect().left, 0.06),
-                y: lerp(oldPos.y, pointerCurr().y - canvas.getBoundingClientRect().top, 0.06)
+                x: lerp(oldPos.x, pointerCurr().x - rect.left, 0.06),
+                y: lerp(oldPos.y, pointerCurr().y - rect.top, 0.06)
             }
-            if (isInViewport(el.get(0))) {
+            if (rect.top >= -rect.height && rect.left >= 0 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) + rect.height && rect.right <= (window.innerWidth || document.documentElement.clientWidth)) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height)
                 for (let i = 0; i < points.length; i++) {
                     let point = points[i]
@@ -3569,7 +3607,10 @@ const mainScript = () => {
 
                     $(data.next.container).find('.abt-award-thumb-item').css('height', $(data.next.container).find('.abt-award-thumb-cms').height())
                     let currIdx;
+                    const awardWrap = $(data.next.container).find('.abt-award').get(0);
                     function initImgMove() {
+                        // Everything below only acts while the pointer is over the awards, so skip the per-frame lookups until then.
+                        if (!(awardWrap && awardWrap.matches(':hover'))) { requestAnimationFrame(initImgMove); return }
                         let parent = $(data.next.container).find('.abt-award-main-cms');
                         let target = $(data.next.container).find('.abt-award-thumb-wrapper');
                         let targetThumb = $(data.next.container).find('.abt-award-thumb-cms')
@@ -3723,7 +3764,10 @@ const mainScript = () => {
                         e.preventDefault()
                         thumbItems.removeClass('active')
                     })
+                    const testiWrap = $(data.next.container).find('.abt-testi').get(0);
                     function initThumbMove() {
+                        // Everything below only acts while the pointer is over the testimonials, so skip the per-frame lookups until then.
+                        if (testiWrap && testiWrap.matches(':hover')) {
                         let wrap = $(data.next.container).find('.abt-testi-thumb-wrap')
                         let target = $(data.next.container).find('.abt-testi-thumb-cms')
                         let xThumb = xGetter(target.get(0))
@@ -3735,6 +3779,7 @@ const mainScript = () => {
                             xSetter(target.get(0))(lerp(xThumb, moveX, 0.05))
                             ySetter(target.get(0))(lerp(yThumb, moveY, 0.05))
                             rotZSetter(target.get(0))(Math.min(Math.max((lerp(rotzThumb, (moveX - xThumb)/40, .05)), -12), 12))
+                        }
                         }
                         requestAnimationFrame(initThumbMove)
                     }

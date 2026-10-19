@@ -8,6 +8,7 @@ The scripts that run the animations on konpo.studio, owned by Konpo. bear.plus b
   - `konpo-min.js` is the main site script (loader, page transitions, cursor, sliders and so on). Every page loads it.
   - `newyear-min.js` is the confetti easter egg. Every page loads it.
   - `ads.js` is only loaded on /ai-design-system.
+  - `kbdfix.js` is the keyboard and focus fixes (Escape closes the menu and popups, focus stays inside an open popup and comes back after, closed popups are `inert`). Every page loads it. It used to be a Webflow inline script, and moved here in v1.5.0 because it outgrew Webflow's 2,000-character limit.
 - `src/` is the source bear.plus sent over (zip, 19 Oct 2026). `konpo.js` is the readable source of `konpo-min.js`. It's very close to the live build but not identical (the easter-egg loader differs), so check that before shipping a build made from it.
 
 ## Loaded from elsewhere
@@ -26,6 +27,14 @@ Rolling back is the same in reverse: point the tag back at the previous version 
 
 ## Releases
 
+- **v1.5.0**: smoother scrolling on About, with nothing changing on screen. Measured at normal CPU speed, the awards section goes from about 16ms of work per frame to 9.5ms and the testimonials from about 17ms to 11ms, so frames that miss 60fps there drop from roughly 150 to 220 per 6 seconds of scrolling to a handful. Home gains about half a millisecond.
+  - Awards table: the copies of each row that are hidden on desktop (about 1,000 letters) get a 0.01px transform when they're split. GSAP measures hidden elements the slow way (show, move to `<html>`, measure, move back), and this lets it skip that. Every letter stays in the reveal, so the timing is the same.
+  - The falling shapes keep their physics running every frame but aren't drawn while they're more than 200px off screen.
+  - The awards and testimonials thumbnail-follow loops skip their per-frame lookups unless the pointer is over their section (that's the only time they did anything).
+  - The title-dot grids read their position once a frame instead of three times, and the header's scroll class uses a cached header height.
+  - `kbdfix.js` 1.1.0 (new here) re-checks which parts are `inert` only when one of them changes class or the page swaps content, at most once a frame. Before, every class change anywhere on the page queued a full check.
+
+  The changes are in `dist/konpo-min.js` as exact replacements on the v1.4.2 build (plus the awards wrapper at the top), mirrored in `src/konpo.js`. Roll back to v1.4.2 (only the konpo-min tag changes) and point the kbdfix tag back at Webflow's inline kbdfix 1.0.0.
 - **v1.4.2**: the summary toggle margin only counts the FAQ when it's showing. Flair has no FAQs, so its section is hidden, but jQuery still measured it (about 420px) and the toggle stopped early there. Roll back to v1.4.1.
 - **v1.4.1**: case-study FAQs. The FAQ section on case studies opens and closes like the services one, and it now sits at the very bottom of the page, below the next-project hero. Going to the next project moves and fades the FAQ along with the hero, CTA and testimonial, and the summary toggle in the side rail still stops above the CTA (its bottom margin counts the FAQ, and is measured again after an answer opens or closes). Roll back to v1.4.0 (same footer, only the konpo-min tag changes; the case FAQ answers then won't open).
 - **v1.4.0**: split text reads as words again for screen readers and AI agents. Letter-level splits put each letter in its own box, so headings read as "S e r v i c e s". After every split, the letters are hidden from assistive tech and each word gets one visually hidden copy of its text (words that hold a link are left alone, so nothing focusable is hidden). The marquee copies on the services pages, About and the Home client logos are marked `aria-hidden`, so each services page has one H1 instead of four. Nothing changes on screen. Roll back to v1.3.0 (same footer, only the konpo-min tag changes).
