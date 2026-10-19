@@ -15,12 +15,13 @@ const mainScript = () => {
         lerp: false,
         duration: 1.6
     })
+    // Drive Lenis from GSAP's ticker and update ScrollTrigger on every Lenis scroll, so scrolling and
+    // scroll-driven animations land on the same frame (Lenis's documented GSAP setup).
     function raf(time) {
-        lenis.raf(time)
-        requestAnimationFrame(raf)
+        lenis.raf(time * 1000)
     }
-
-    requestAnimationFrame(raf)
+    lenis.on('scroll', ScrollTrigger.update)
+    gsap.ticker.add(raf)
 
     //Utils
     const lerp = (a,b,t = 0.08) => {
@@ -1146,10 +1147,9 @@ const mainScript = () => {
                 trigger: container,
                 start:' top top',
                 end: 'bottom bottom',
-                scrub: true,
-                onUpdate: (self) => {
-                    gsap.set('.header-prog-bg', {clipPath: `polygon(0% 0%, 100% 0%, 100%${($('.header-prog-inner').css('top') - $('.header-prog').height()) / $('.header-prog').height()}%, 0% ${($('.header-prog-inner').css('top') - $('.header-prog').height()) / $('.header-prog').height()}%)`})
-                }
+                scrub: true
+                // An onUpdate here used to set a clip-path from css('top') minus a number, which is NaN, so it
+                // never applied but forced a layout on every scroll frame. Removed in v1.2.0.
             }
         })
         headerProgTl
