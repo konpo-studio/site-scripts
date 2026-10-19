@@ -1,0 +1,25 @@
+# konpo-site-scripts
+
+The scripts that run the animations on konpo.studio, owned by Konpo. bear.plus built them, and they used to be served from bear.plus's CDN (`cdnwf-prod.bear.plus/konpo/…`) and their GitHub (`Azolia-Design/konpo`). The site loads them from this repo through jsDelivr instead, pinned to a release tag, so nothing on the site changes unless we cut a new tag and point Webflow at it.
+
+## What's here
+
+- `dist/` holds the files the site loads. In v1.0.0 they're byte-for-byte copies of what was live on 19 Oct 2026, so the switch changes nothing.
+  - `konpo-min.js` is the main site script (loader, page transitions, cursor, sliders and so on). Every page loads it.
+  - `newyear-min.js` is the confetti easter egg. Every page loads it.
+  - `ads.js` is only loaded on /ai-design-system.
+- `src/` is the source bear.plus sent over (zip, 19 Oct 2026). `konpo.js` is the readable source of `konpo-min.js`. It's very close to the live build but not identical (the easter-egg loader differs), so check that before shipping a build made from it.
+
+## Still loaded from elsewhere
+
+- **GSAP SplitText and DrawSVG** still come from `Azolia-Design/konpo` at a pinned commit. They're the paid Club GreenSock plugins from GSAP 3.11, so they don't belong in a public repo. GSAP 3.13+ made them free on the official CDN, but SplitText was rewritten, so upgrading needs its own round of testing.
+- Lenis, GSAP core, Barba, Swiper, dayjs, matter-js and lordicon come from their public CDNs at pinned versions, apart from `swiper@8` (which floats within v8) and lordicon (which isn't versioned at all).
+
+## Releasing a change
+
+1. Edit the file in `dist/` (or rebuild it from `src/`), commit, and tag a new version: `git tag v1.0.1 && git push --tags`.
+2. The file is then at `https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.0.1/dist/konpo-min.js`. Tagged URLs never change, so a mistake can't reach the site until Webflow points at it.
+3. Get the integrity hash: `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
+4. In Webflow, update the script tag (Site settings → Custom code → Footer, or the page's own code for `ads.js`) with the new URL and `integrity="sha384-…" crossorigin="anonymous"`. Publish to staging, test, then publish to konpo.studio.
+
+Rolling back is the same in reverse: point the tag back at the previous version and publish.
