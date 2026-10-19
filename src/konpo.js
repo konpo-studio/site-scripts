@@ -2196,6 +2196,10 @@ const mainScript = () => {
             .to($(data.current.container).find('.projdtl-cta'), {y: -distance, duration: 1, autoAlpha: 0, ease: 'power2.inOut'}, 0)
             .to($(data.current.container).find('.projdtl-testi'), {y: -distance, duration: 1, autoAlpha: 0, ease: 'power2.inOut'}, 0)
             .to($(data.current.container).find('.projdtl-sum-stick-inner'), {autoAlpha: 0, duration: .4, ease: 'none'}, 0)
+            // The FAQ sits below the next-project hero, so it moves and fades with it like the CTA and testimonial
+            if ($(data.current.container).find('.ser-faq').length) {
+                tl.to($(data.current.container).find('.ser-faq'), {y: -distance, duration: 1, autoAlpha: 0, ease: 'power2.inOut'}, 0)
+            }
             return tl
         } else {
             gsap.set(data.next.container, {display: 'none'})
@@ -3849,7 +3853,7 @@ const mainScript = () => {
             projdtlToc(data)
             function projDtlSum(data) {
                 let defaultTop = $(data.next.container).find('.projdtl-intro-toggle-ph').offset().top;
-                let defaultBot = $(data.next.container).find('.projdtl-cta').outerHeight() + $(data.next.container).find('.projdtl-hero.mod-bottom').outerHeight() + parseFloat($(data.next.container).find('.projdtl-testi').css('padding-bottom'));
+                let defaultBot = $(data.next.container).find('.projdtl-cta').outerHeight() + $(data.next.container).find('.projdtl-hero.mod-bottom').outerHeight() + parseFloat($(data.next.container).find('.projdtl-testi').css('padding-bottom')) + ($(data.next.container).find('.ser-faq').outerHeight() || 0);
                 $(data.next.container).find('.projdtl-sum-stick-wrap').removeClass('hidden')
                 gsap.set($(data.next.container).find('.projdtl-sum-stick-wrap'), {marginTop: defaultTop, marginBottom: defaultBot})
                 $(data.next.container).find('.projdtl-intro-toggle').on('click', function(e) {
@@ -3914,6 +3918,33 @@ const mainScript = () => {
                 }
             }
             projDtlSum(data)
+
+            // Case-study FAQ: same accordion as the services pages. Opening an answer makes the page taller,
+            // so the summary toggle's bottom margin is measured again once the answer has opened or closed.
+            function projDtlFaq(data) {
+                const container = $(data.next.container);
+                const bodies = container.find('.ser-faq-item-body');
+                if (!bodies.length) return;
+                bodies.css('display', 'block')
+                gsap.set(bodies, {height: 0, overwrite: true, marginTop: 0})
+                container.find('.ser-faq-item').on('click', function(e) {
+                    e.preventDefault();
+                    const wasOpen = $(this).hasClass('active');
+                    const open = $('.ser-faq-item.active');
+                    if (open.length) {
+                        gsap.to(open.find('.ser-faq-item-body'), {height: 0, duration: .6, marginTop: '0', overwrite: true})
+                        open.removeClass('active')
+                    }
+                    if (!wasOpen) {
+                        $(this).addClass('active')
+                        gsap.to($(this).find('.ser-faq-item-body'), {height: 'auto', duration: .6, marginTop: '1rem', overwrite: true})
+                    }
+                    gsap.delayedCall(.65, () => gsap.set(container.find('.projdtl-sum-stick-wrap'), {
+                        marginBottom: container.find('.projdtl-cta').outerHeight() + container.find('.projdtl-hero.mod-bottom').outerHeight() + parseFloat(container.find('.projdtl-testi').css('padding-bottom')) + (container.find('.ser-faq').outerHeight() || 0)
+                    }))
+                })
+            }
+            projDtlFaq(data)
 
             function projdtlInfo(data) {
                 const infoLabel = new SplitText($(data.next.container).find('.projdtl-info-label'), typeOpts.chars)
