@@ -3853,7 +3853,7 @@ const mainScript = () => {
             projdtlToc(data)
             function projDtlSum(data) {
                 let defaultTop = $(data.next.container).find('.projdtl-intro-toggle-ph').offset().top;
-                let defaultBot = $(data.next.container).find('.projdtl-cta').outerHeight() + $(data.next.container).find('.projdtl-hero.mod-bottom').outerHeight() + parseFloat($(data.next.container).find('.projdtl-testi').css('padding-bottom')) + ($(data.next.container).find('.ser-faq').outerHeight() || 0);
+                let defaultBot = $(data.next.container).find('.projdtl-cta').outerHeight() + $(data.next.container).find('.projdtl-hero.mod-bottom').outerHeight() + parseFloat($(data.next.container).find('.projdtl-testi').css('padding-bottom')) + ($(data.next.container).find('.ser-faq:visible').outerHeight() || 0);
                 $(data.next.container).find('.projdtl-sum-stick-wrap').removeClass('hidden')
                 gsap.set($(data.next.container).find('.projdtl-sum-stick-wrap'), {marginTop: defaultTop, marginBottom: defaultBot})
                 $(data.next.container).find('.projdtl-intro-toggle').on('click', function(e) {
@@ -3940,7 +3940,7 @@ const mainScript = () => {
                         gsap.to($(this).find('.ser-faq-item-body'), {height: 'auto', duration: .6, marginTop: '1rem', overwrite: true})
                     }
                     gsap.delayedCall(.65, () => gsap.set(container.find('.projdtl-sum-stick-wrap'), {
-                        marginBottom: container.find('.projdtl-cta').outerHeight() + container.find('.projdtl-hero.mod-bottom').outerHeight() + parseFloat(container.find('.projdtl-testi').css('padding-bottom')) + (container.find('.ser-faq').outerHeight() || 0)
+                        marginBottom: container.find('.projdtl-cta').outerHeight() + container.find('.projdtl-hero.mod-bottom').outerHeight() + parseFloat(container.find('.projdtl-testi').css('padding-bottom')) + (container.find('.ser-faq:visible').outerHeight() || 0)
                     }))
                 })
             }
