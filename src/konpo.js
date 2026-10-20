@@ -896,6 +896,12 @@ const mainScript = () => {
     // handleEaterEgg();
     let idleTime = 0;
     const handleCursor = {
+        // Cached lookups for the cursor's own singletons (outside the Barba container); re-queried if the element is gone.
+        _cache: {},
+        q(sel) {
+            let c = this._cache[sel]
+            return c && c[0] && c[0].isConnected ? c : this._cache[sel] = $(sel)
+        },
         updateHtml: () => {
             $('[data-cursor="btn"]').each((idx, el) => {
                 $(el).find('.txt').css({
@@ -940,41 +946,44 @@ const mainScript = () => {
                     idleTime = 0;
                 }
                 if (idleTime > 2 * 60) {
-                    $('.cursor-inner').addClass('on-idle')
+                    handleCursor.q('.cursor-inner').addClass('on-idle')
                 } else {
-                    $('.cursor-inner').removeClass('on-idle')
+                    handleCursor.q('.cursor-inner').removeClass('on-idle')
                 }
             }
             function moveCursor() {
-                let cursorX = xGetter('.cursor')
-                let cursorY = yGetter('.cursor')
+                // One :hover query per frame (hover can't change mid-frame); it used to run up to 16 times.
+                let cursorEl = handleCursor.q('.cursor')[0]
+                let cursorX = xGetter(cursorEl)
+                let cursorY = yGetter(cursorEl)
+                let hovered = $('[data-cursor]:hover')
                 updateIdle(cursorX)
                 handleCursor.reset()
-                if ($('[data-cursor]:hover').length) {
-                    let type = $('[data-cursor]:hover').attr('data-cursor')
+                if (hovered.length) {
+                    let type = hovered.attr('data-cursor')
                         switch (type) {
                             case 'social':
-                                $('.cursor-inner').addClass('on-hover')
-                                let socialType = $('[data-cursor]:hover').attr('data-cursor-social')
+                                handleCursor.q('.cursor-inner').addClass('on-hover')
+                                let socialType = hovered.attr('data-cursor-social')
                                 $('.cursor-inner .cursor-ic').removeClass('active')
                                 $(`.cursor-inner .cursor-ic[data-cursor-view=${socialType}]`).addClass('active')
                                 break;
                             case 'ext':
-                                $('.cursor-inner').addClass('on-hover')
+                                handleCursor.q('.cursor-inner').addClass('on-hover')
                                 $('.cursor-inner .cursor-ic.cursor-arrow').addClass('active')
                                 break;
                             case 'expand':
-                                $('.cursor-inner').addClass('on-hover')
+                                handleCursor.q('.cursor-inner').addClass('on-hover')
                                 $('.cursor-inner .cursor-ic.cursor-expand').addClass('active')
-                                if ($('[data-cursor]:hover').hasClass('active')) {
+                                if (hovered.hasClass('active')) {
                                     $('.cursor-inner .cursor-ic.cursor-expand').addClass('to-close')
                                 } else {
                                     $('.cursor-inner .cursor-ic.cursor-expand').removeClass('to-close')
                                 }
                                 break;
                             case 'expand-md':
-                                if (!$('.cursor-inner').hasClass('on-hover-md')) {
-                                    $('.cursor-inner').addClass('on-hover-md')
+                                if (!handleCursor.q('.cursor-inner').hasClass('on-hover-md')) {
+                                    handleCursor.q('.cursor-inner').addClass('on-hover-md')
                                     $('.cursor-inner .cursor-ic.cursor-expand').addClass('active')
                                 }
                                 if ($('[data-cursor="expand-md"]').hasClass('active')) {
@@ -984,41 +993,41 @@ const mainScript = () => {
                                 }
                                 break;
                             case 'expand-md-sm':
-                                if (!$('.cursor-inner').hasClass('on-hover-md-sm')) {
-                                    $('.cursor-inner').addClass('on-hover-md-sm')
+                                if (!handleCursor.q('.cursor-inner').hasClass('on-hover-md-sm')) {
+                                    handleCursor.q('.cursor-inner').addClass('on-hover-md-sm')
                                     $('.cursor-inner .cursor-ic.cursor-expand').addClass('active').addClass('mod-20')
                                     $('.cursor-inner .cursor-video').find('.cursor-txt-close').removeClass('active')
                                 }
                                 break;
                             case 'txtLink':
-                                $('.cursor-inner').addClass('on-hover-sm');
+                                handleCursor.q('.cursor-inner').addClass('on-hover-sm');
                                 let targetEl;
-                                if ($('[data-cursor]:hover').attr('data-cursor-txtLink') == 'parent') {
-                                    targetEl = $('[data-cursor]:hover').parent()
-                                } else if ($('[data-cursor]:hover').attr('data-cursor-txtLink') == 'child') {
-                                    targetEl = $('[data-cursor]:hover').find('[data-cursor-txtLink-child]')
+                                if (hovered.attr('data-cursor-txtLink') == 'parent') {
+                                    targetEl = hovered.parent()
+                                } else if (hovered.attr('data-cursor-txtLink') == 'child') {
+                                    targetEl = hovered.find('[data-cursor-txtLink-child]')
                                 } else {
-                                    targetEl = $('[data-cursor]:hover')
+                                    targetEl = hovered
                                 }
 
                                 let targetGap = 8;
-                                if ($('[data-cursor]:hover').attr('data-cursor-txtLink-gap')) {
-                                    targetGap = $('[data-cursor]:hover').attr('data-cursor-txtLink-gap')
+                                if (hovered.attr('data-cursor-txtLink-gap')) {
+                                    targetGap = hovered.attr('data-cursor-txtLink-gap')
                                 }
                                 targetX = targetEl.get(0).getBoundingClientRect().left - parseRem(targetGap) - $('.cursor-inner.on-hover-sm').width() / 2;
                                 targetY = targetEl.get(0).getBoundingClientRect().top + targetEl.get(0).getBoundingClientRect().height / 2;
                                 break;
                             case 'btn':
-                                $('.cursor-inner').addClass('on-hidden');
+                                handleCursor.q('.cursor-inner').addClass('on-hidden');
                                 let targetBtn;
-                                targetBtn = $('[data-cursor="btn"]:hover')
+                                targetBtn = hovered.filter('[data-cursor="btn"]')
                                 targetX = targetBtn.get(0).getBoundingClientRect().left + targetBtn.get(0).getBoundingClientRect().width / 2;
                                 targetY = targetBtn.get(0).getBoundingClientRect().top + targetBtn.get(0).getBoundingClientRect().height / 2;
                                 let btnDotX, btnDotY;
                                 if (!gotBtnSize) {
-                                    if ($('[data-cursor]:hover').hasClass('home-ser-item-btn')) {
+                                    if (hovered.hasClass('home-ser-item-btn')) {
                                         gsap.set('html', {'--cursor-width': targetBtn.get(0).getBoundingClientRect().width + parseRem(130), '--cursor-height': targetBtn.get(0).getBoundingClientRect().height + parseRem(130)})
-                                    } else if ($('[data-cursor]:hover').hasClass('sm-menu')) {
+                                    } else if (hovered.hasClass('sm-menu')) {
                                         gsap.set('html', {'--cursor-width': targetBtn.get(0).getBoundingClientRect().width * 1.3, '--cursor-height': targetBtn.get(0).getBoundingClientRect().height * 1.3})
                                     } else {
                                         gsap.set('html', {'--cursor-width': targetBtn.get(0).getBoundingClientRect().width, '--cursor-height': targetBtn.get(0).getBoundingClientRect().height})
@@ -1038,9 +1047,9 @@ const mainScript = () => {
 
                                 break;
                             case 'btn-inner':
-                                $('.cursor-inner').addClass('on-hover-btn');
+                                handleCursor.q('.cursor-inner').addClass('on-hover-btn');
                                 let targetBtnInner;
-                                targetBtnInner = $('[data-cursor="btn-inner"]:hover').find('[data-cursor-btn-inner]')
+                                targetBtnInner = hovered.filter('[data-cursor="btn-inner"]').find('[data-cursor-btn-inner]')
                                 targetX = targetBtnInner.get(0).getBoundingClientRect().left + targetBtnInner.get(0).getBoundingClientRect().width / 2;
                                 targetY = targetBtnInner.get(0).getBoundingClientRect().top + targetBtnInner.get(0).getBoundingClientRect().height / 2;
                                 if (!gotBtnSize) {
@@ -1049,10 +1058,10 @@ const mainScript = () => {
                                 }
                                 break;
                             case 'video':
-                                if ($('[data-cursor]:hover').length > 1) {
+                                if (hovered.length > 1) {
                                     return
                                 }
-                                $('.cursor-inner').addClass('on-hover-video');
+                                handleCursor.q('.cursor-inner').addClass('on-hover-video');
                                 if ($('[data-video]').attr('data-video') == 'to-play') {
                                     $('.cursor-inner .cursor-video').find('.cursor-video-pause').removeClass('active')
                                     $('.cursor-inner .cursor-video').find('.cursor-video-play').addClass('active')
@@ -1063,51 +1072,51 @@ const mainScript = () => {
 
                                 break;
                             case 'soon':
-                                $('.cursor-inner').removeClass('on-hover');
+                                handleCursor.q('.cursor-inner').removeClass('on-hover');
 
-                                $('.cursor-inner').addClass('on-hover-soon');
+                                handleCursor.q('.cursor-inner').addClass('on-hover-soon');
                                 $('.cursor-inner .cursor-video').find('.cursor-txt-soon').addClass('active')
                                 $('.cursor-inner .cursor-video').find('.cursor-txt-case').removeClass('active')
                                 $('.cursor-inner .cursor-video').find('.cursor-txt-close').removeClass('active')
                                 break;
                             case 'drag':
-                                $('.cursor-inner').addClass('on-hover');
+                                handleCursor.q('.cursor-inner').addClass('on-hover');
                                 $('.cursor-inner .cursor-video').find('.cursor-txt-drag').addClass('active')
                                 break;
                             case 'case':
-                                $('.cursor-inner').removeClass('on-hover-soon');
+                                handleCursor.q('.cursor-inner').removeClass('on-hover-soon');
 
-                                $('.cursor-inner').addClass('on-hover');
+                                handleCursor.q('.cursor-inner').addClass('on-hover');
                                 $('.cursor-inner .cursor-video').find('.cursor-txt-case').addClass('active')
                                 $('.cursor-inner .cursor-video').find('.cursor-txt-soon').removeClass('active')
                                 $('.cursor-inner .cursor-video').find('.cursor-txt-close').removeClass('active')
                                 break;
                             case 'close':
-                                $('.cursor-inner').removeClass('on-hover-soon');
-                                $('.cursor-inner').removeClass('on-hidden')
+                                handleCursor.q('.cursor-inner').removeClass('on-hover-soon');
+                                handleCursor.q('.cursor-inner').removeClass('on-hidden')
                                 $('.cursor-ic.cursor-expand').removeClass('active')
-                                $('.cursor-inner').addClass('on-hover');
+                                handleCursor.q('.cursor-inner').addClass('on-hover');
                                 $('.cursor-inner .cursor-video').find('.cursor-txt-case').removeClass('active')
                                 $('.cursor-inner .cursor-video').find('.cursor-txt-soon').removeClass('active')
                                 $('.cursor-inner .cursor-video').find('.cursor-txt-close').addClass('active')
                                 break;
                             case 'hidden':
-                                $('.cursor-inner').removeClass('on-hover-soon');
-                                $('.cursor-inner').removeClass('on-hover');
+                                handleCursor.q('.cursor-inner').removeClass('on-hover-soon');
+                                handleCursor.q('.cursor-inner').removeClass('on-hover');
                                 $('.cursor-inner .cursor-video').find('.cursor-txt-case').removeClass('active')
                                 $('.cursor-inner .cursor-video').find('.cursor-txt-soon').removeClass('active')
                                 $('.cursor-inner .cursor-video').find('.cursor-txt-close').removeClass('active')
-                                $('.cursor-inner').addClass('on-hidden')
+                                handleCursor.q('.cursor-inner').addClass('on-hidden')
                                 break;
                             case 'img':
-                                let imgEl = $('[data-cursor]:hover')
+                                let imgEl = hovered
                                 let imgSrc = imgEl.attr('data-cursor-img')
                                 let imgRatio = imgEl.attr('data-cursor-img-ratio')
                                 &
                                 $('.cursor-img img').attr('src', imgSrc)
                                 $('.cursor-img-inner, .cursor-img-inner-img').css('aspect-ratio', imgRatio)
-                                $('.cursor-inner').addClass('on-hover-img');
-                                $('.cursor-inner').addClass('on-hidden');
+                                handleCursor.q('.cursor-inner').addClass('on-hover-img');
+                                handleCursor.q('.cursor-inner').addClass('on-hidden');
                                 $('.cursor-img').addClass('active')
                                 break;
                             default:
@@ -1117,40 +1126,40 @@ const mainScript = () => {
                     gotBtnSize = false;
                 }
 
-                if ($('.cursor-inner').hasClass('on-hover-sm')) {
-                    xSetter('.cursor')(lerp(cursorX, targetX, 0.09))
-                    ySetter('.cursor')(lerp(cursorY, targetY, 0.09))
-                } else if ($('.cursor-inner').hasClass('on-hover-md')) {
+                if (handleCursor.q('.cursor-inner').hasClass('on-hover-sm')) {
+                    xSetter(cursorEl)(lerp(cursorX, targetX, 0.09))
+                    ySetter(cursorEl)(lerp(cursorY, targetY, 0.09))
+                } else if (handleCursor.q('.cursor-inner').hasClass('on-hover-md')) {
                     if ( $('.projdtl-intro-toggle').hasClass('active')) {
                         if ($('.projdtl-sum:hover').length || $('.header > *:hover').length) {
-                            xSetter('.cursor')(lerp(cursorX, $('.projdtl-intro-toggle-wrap').get(0).getBoundingClientRect().left + $('.projdtl-intro-toggle').outerWidth() / 2, 0.09))
-                            ySetter('.cursor')(lerp(cursorY, $('.projdtl-intro-toggle-wrap').get(0).getBoundingClientRect().top + $('.projdtl-intro-toggle').outerHeight() / 2, 0.09))
+                            xSetter(cursorEl)(lerp(cursorX, $('.projdtl-intro-toggle-wrap').get(0).getBoundingClientRect().left + $('.projdtl-intro-toggle').outerWidth() / 2, 0.09))
+                            ySetter(cursorEl)(lerp(cursorY, $('.projdtl-intro-toggle-wrap').get(0).getBoundingClientRect().top + $('.projdtl-intro-toggle').outerHeight() / 2, 0.09))
                         } else {
-                            xSetter('.cursor')(lerp(cursorX, pointerCurr().x, 0.09))
-                            ySetter('.cursor')(lerp(cursorY, pointerCurr().y, 0.09))
+                            xSetter(cursorEl)(lerp(cursorX, pointerCurr().x, 0.09))
+                            ySetter(cursorEl)(lerp(cursorY, pointerCurr().y, 0.09))
                         }
                     } else {
-                        xSetter('.cursor')(lerp(cursorX, pointerCurr().x, 0.09))
-                        ySetter('.cursor')(lerp(cursorY, pointerCurr().y, 0.09))
+                        xSetter(cursorEl)(lerp(cursorX, pointerCurr().x, 0.09))
+                        ySetter(cursorEl)(lerp(cursorY, pointerCurr().y, 0.09))
                     }
-                } else if ($('.cursor-inner').hasClass('on-hover-btn')) {
-                    xSetter('.cursor')(lerp(cursorX, targetX, 0.09))
-                    ySetter('.cursor')(lerp(cursorY, targetY, 0.09))
+                } else if (handleCursor.q('.cursor-inner').hasClass('on-hover-btn')) {
+                    xSetter(cursorEl)(lerp(cursorX, targetX, 0.09))
+                    ySetter(cursorEl)(lerp(cursorY, targetY, 0.09))
                 } else {
-                    xSetter('.cursor')(lerp(cursorX, pointerCurr().x, 0.09))
-                    ySetter('.cursor')(lerp(cursorY, pointerCurr().y, 0.09))
+                    xSetter(cursorEl)(lerp(cursorX, pointerCurr().x, 0.09))
+                    ySetter(cursorEl)(lerp(cursorY, pointerCurr().y, 0.09))
                 }
                 if ($('.loader24-video [data-video]').length) {
-                    if ($('.loader24-video [data-video]:hover').length && $('.cursor-vid-prog').length) {
-                        $('.cursor-vid-prog').addClass('active')
+                    if ($('.loader24-video [data-video]:hover').length && handleCursor.q('.cursor-vid-prog').length) {
+                        handleCursor.q('.cursor-vid-prog').addClass('active')
                     } else {
-                        $('.cursor-vid-prog').removeClass('active')
+                        handleCursor.q('.cursor-vid-prog').removeClass('active')
                     }
-                } else if ($('.popup-reel').length) {
-                    if ($('.popup-reel [data-video]:hover').length && $('.cursor-vid-prog').length) {
-                        $('.cursor-vid-prog').addClass('active')
+                } else if (handleCursor.q('.popup-reel').length) {
+                    if (handleCursor.q('.popup-reel').find('[data-video]:hover').length && handleCursor.q('.cursor-vid-prog').length) {
+                        handleCursor.q('.cursor-vid-prog').addClass('active')
                     } else {
-                        $('.cursor-vid-prog').removeClass('active')
+                        handleCursor.q('.cursor-vid-prog').removeClass('active')
                     }
                 }
                 requestAnimationFrame(moveCursor)
@@ -1164,7 +1173,7 @@ const mainScript = () => {
             $('.cursor-wrap').addClass('hidden')
         },
         reset: () => {
-            $('.cursor-inner').removeClass('on-hover on-hover-sm on-hover-md on-hover-md-sm on-hidden on-hover-btn on-hover-video on-hover-soon on-hover-img')
+            handleCursor.q('.cursor-inner').removeClass('on-hover on-hover-sm on-hover-md on-hover-md-sm on-hidden on-hover-btn on-hover-video on-hover-soon on-hover-img')
             $('.cursor-inner .cursor-ic').removeClass('active mod-20')
             $('.cursor-inner .cursor-video').find('.cursor-txt-case, .cursor-txt-close, .cursor-txt-drag, .cursor-video-play, .cursor-video-pause, .cursor-txt-soon').removeClass('active')
             $('.cursor-img').removeClass('active')
@@ -1195,16 +1204,17 @@ const mainScript = () => {
         })
 
         function move() {
-            if ($('[data-magnetic]:hover').length) {
-                $('[data-magnetic]:hover').css('zIndex', '1');
-                let strength = $('[data-magnetic]:hover').attr('data-magnetic');
-                let targetX = xGetter('[data-magnetic]:hover');
-                let targetY = yGetter('[data-magnetic]:hover');
-                $('[data-magnetic]:hover').css('zIndex', '2');
-                let x = (pointerCurr().x - $('[data-magnetic]:hover').get(0).getBoundingClientRect().left - $('[data-magnetic]:hover').outerWidth() / 2) / ($('[data-magnetic]:hover').outerWidth() / 2);
-                let y = (pointerCurr().y - $('[data-magnetic]:hover').get(0).getBoundingClientRect().top - $('[data-magnetic]:hover').outerHeight() / 2) / ($('[data-magnetic]:hover').outerHeight() / 2);
-                xSetter('[data-magnetic]:hover')(lerp(targetX, strength*x, 0.04))
-                ySetter('[data-magnetic]:hover')(lerp(targetY, strength*y, 0.04))
+            let hovered = $('[data-magnetic]:hover') // once per frame
+            if (hovered.length) {
+                hovered.css('zIndex', '1');
+                let strength = hovered.attr('data-magnetic');
+                let targetX = xGetter(hovered[0]);
+                let targetY = yGetter(hovered[0]);
+                hovered.css('zIndex', '2');
+                let x = (pointerCurr().x - hovered.get(0).getBoundingClientRect().left - hovered.outerWidth() / 2) / (hovered.outerWidth() / 2);
+                let y = (pointerCurr().y - hovered.get(0).getBoundingClientRect().top - hovered.outerHeight() / 2) / (hovered.outerHeight() / 2);
+                xSetter(hovered.get())(lerp(targetX, strength*x, 0.04))
+                ySetter(hovered.get())(lerp(targetY, strength*y, 0.04))
             }
             requestAnimationFrame(move)
         }
@@ -2505,12 +2515,17 @@ const mainScript = () => {
             h = parseRem(20),
             w = parseRem(20),
             opacity = .56,
-            color = `rgba(${rgb.x}, ${rgb.y}, ${rgb.z}, ${opacity}`;
-        window.addEventListener('resize', function() {
+            color = `rgba(${rgb.x}, ${rgb.y}, ${rgb.z}, ${opacity}`,
+            // What the canvas last showed, so an unchanged frame isn't redrawn (null = cleared).
+            drawn = { points: undefined, w: -1, h: -1, x: 0, y: 0 },
+            wasConnected = false;
+        canvas.addEventListener('contextrestored', () => { drawn.points = undefined })
+        window.addEventListener('resize', onResize)
+        function onResize() {
             canvas.width = Math.ceil($(el).parent().outerWidth());
             canvas.height = Math.ceil($(el).parent().outerHeight());
             setup()
-        })
+        }
 
         window.dispatchEvent(new Event('resize'))
 
@@ -2544,6 +2559,9 @@ const mainScript = () => {
                 y: lerp(oldPos.y, pointerCurr().y - rect.top, 0.06)
             }
             if (rect.top >= -rect.height && rect.left >= 0 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) + rect.height && rect.right <= (window.innerWidth || document.documentElement.clientWidth)) {
+                // Skip the redraw while the eased mouse has moved less than 0.05px since the last one (same picture).
+                if (drawn.points === points && drawn.w === canvas.width && drawn.h === canvas.height && Math.abs(mouse.x - drawn.x) < .05 && Math.abs(mouse.y - drawn.y) < .05) return
+                drawn = { points, w: canvas.width, h: canvas.height, x: mouse.x, y: mouse.y }
                 ctx.clearRect(0, 0, canvas.width, canvas.height)
                 for (let i = 0; i < points.length; i++) {
                     let point = points[i]
@@ -2563,12 +2581,16 @@ const mainScript = () => {
                     ctx.fillStyle = `rgba(${rgb.x}, ${rgb.y}, ${rgb.z}, ${newOpacity}`;
                     ctx.fill()
                 }
-            } else {
+            } else if (drawn.points !== null) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height)
+                drawn.points = null
             }
         }
 
         function animloop() {
+            // Stop for good once Barba has removed the canvas (each visit used to leave a loop running).
+            if (wasConnected && !canvas.isConnected) return window.removeEventListener('resize', onResize)
+            if (canvas.isConnected) wasConnected = true
             render()
             requestAnimationFrame(animloop)
         }

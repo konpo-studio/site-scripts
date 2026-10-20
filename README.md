@@ -9,6 +9,7 @@ The scripts that run the animations on konpo.studio, owned by Konpo. bear.plus b
   - `newyear-min.js` is the confetti easter egg. Every page loads it.
   - `ads.js` is only loaded on /ai-design-system.
   - `kbdfix.js` is the keyboard and focus fixes (Escape closes the menu and popups, focus stays inside an open popup and comes back after, closed popups are `inert`). Every page loads it. It used to be a Webflow inline script, and moved here in v1.5.0 because it outgrew Webflow's 2,000-character limit.
+  - `navautohide.js` hides the header while you scroll down and brings it back when you scroll up. Every page loads it through the Webflow registered script NavAutoHide. It moved here in v1.6.1 (as NavAutoHide 2.0.1) because it outgrew Webflow's 2,000-character limit.
 - `src/` is the source bear.plus sent over (zip, 19 Oct 2026). `konpo.js` is the readable source of `konpo-min.js`. It's very close to the live build but not identical (the easter-egg loader differs), so check that before shipping a build made from it.
 
 ## Loaded from elsewhere
@@ -27,6 +28,13 @@ Rolling back is the same in reverse: point the tag back at the previous version 
 
 ## Releases
 
+- **v1.6.1**: less work per frame, with nothing changing on screen. The v1.6.0 switches and their defaults are unchanged.
+  - Cursor: the custom cursor's frame loop looks up the hovered `[data-cursor]` element once a frame (it did it up to 16 times) and keeps the cursor's own elements (`.cursor`, `.cursor-inner`, `.popup-reel`, `.cursor-vid-prog`) instead of searching the page for them every frame. They sit outside the Barba container and are looked up again if they ever leave the page. The magnetic buttons look up the hovered element once a frame too.
+  - Title dot grids: each grid's frame loop stops once Barba removes its canvas. Before, every visit to Home, About or a case study started loops that never stopped (12 were still running after five page changes). A grid also skips the redraw while the eased mouse has moved less than 0.05px since the last one. The case-study hero grid redrew about 2,900 dots every frame even when nothing moved, and the picture is the same.
+  - `navautohide.js` (NavAutoHide 2.0.1) checks its four header elements directly on each scroll event, instead of searching the whole page (0.1 to 0.25ms each time).
+  - Separately in Webflow, the lottieload registered script (1.1.0) freezes a Lottie that starts playing off screen, and the player starts it again when it scrolls into view. After a reload, Home's four service Lotties used to play at 60fps off screen.
+
+  Measured over 8 seconds of scrolling at normal CPU speed, script work per frame goes from about 2.0 to 1.5ms at the top of Home, 2.5 to 1.6ms lower down, 3.3 to 2.8ms on About and 2.4 to 2.0ms on a case study, and the scroll handlers take about half as long. On a 4x-slowed CPU, frames over 16.7ms on Home go from about 90 to 17 at the top, 110 to 55 at 2,500px and 245 to 10 to 60 at 6,300px. Sitting still at the top of a case study, script work per frame goes from 2.0 to 1.1ms (2.5 to 0.45ms on the slow CPU). Hover states, cursor icons, magnetic buttons, the header hide and show, and the dot-grid pixels were checked against v1.6.0 on Home, About, Zello and the design system page and match. The changes are exact replacements in the minified body of `dist/konpo-min.js`, mirrored in `src/konpo.js`. Roll back to v1.6.0 (and NavAutoHide 2.0.0, lottieload 1.0.0).
 - **v1.6.0**: native scrolling and gradient headlines, each behind a switch on the konpo-min footer tag.
   - `data-smooth-scroll="off"` (the default) lets the browser scroll the page itself. Lenis stays loaded for everything else (popups locking the page, the animated jumps to anchors and case-study sections, scroll events), and the About team marquee still speeds up with scroll speed. Set it to `"on"` for the old Lenis smooth wheel.
   - `data-headlines="gradient"` (the default) turns the scroll headlines on Home, About, case studies and services into the grey-to-dark fill, line by line, instead of letter and word reveals. The smaller text that revealed with them (labels, sub copy, names) now just sits there. Hero and page-load reveals, and rich-text headlines with images in them, are unchanged. Set it to `"reveal"` for the old reveals.
