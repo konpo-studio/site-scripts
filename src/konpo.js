@@ -3928,6 +3928,30 @@ const mainScript = () => {
                 }
             }
             abtTesti(data)
+            // About FAQ: the same accordion as the services pages. Opening an answer makes the page taller,
+            // so ScrollTrigger measures the page again once the answer has opened or closed.
+            function abtFaq(data) {
+                const container = $(data.next.container);
+                const bodies = container.find('.ser-faq-item-body');
+                if (!bodies.length) return;
+                bodies.css('display', 'block')
+                gsap.set(bodies, {height: 0, overwrite: true, marginTop: 0})
+                container.find('.ser-faq-item').on('click', function(e) {
+                    e.preventDefault();
+                    const wasOpen = $(this).hasClass('active');
+                    const open = container.find('.ser-faq-item.active');
+                    const refresh = () => ScrollTrigger.refresh();
+                    if (open.length) {
+                        gsap.to(open.find('.ser-faq-item-body'), {height: 0, duration: .6, marginTop: '0', overwrite: true, onComplete: refresh})
+                        open.removeClass('active')
+                    }
+                    if (!wasOpen) {
+                        $(this).addClass('active')
+                        gsap.to($(this).find('.ser-faq-item-body'), {height: 'auto', duration: .6, marginTop: '1rem', overwrite: true, onComplete: refresh})
+                    }
+                })
+            }
+            abtFaq(data)
         },
         beforeLeave() {
             physicalEngine.destroy()

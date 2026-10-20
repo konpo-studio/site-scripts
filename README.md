@@ -28,6 +28,7 @@ Rolling back is the same in reverse: point the tag back at the previous version 
 
 ## Releases
 
+- **v1.6.2**: the About page FAQ opens and closes from konpo-min, like the services and case-study ones. The About view now binds the `.ser-faq` accordion (one answer open at a time, 0.6s, and ScrollTrigger measures the page again once an answer has opened or closed). It replaces the inline AboutFaq 1.0.0 script that sat at the end of the Webflow head code, which goes with this release. Nothing else changes. Roll back to v1.6.1 and put the inline script back.
 - **v1.6.1**: less work per frame, with nothing changing on screen. The v1.6.0 switches and their defaults are unchanged.
   - Cursor: the custom cursor's frame loop looks up the hovered `[data-cursor]` element once a frame (it did it up to 16 times) and keeps the cursor's own elements (`.cursor`, `.cursor-inner`, `.popup-reel`, `.cursor-vid-prog`) instead of searching the page for them every frame. They sit outside the Barba container and are looked up again if they ever leave the page. The magnetic buttons look up the hovered element once a frame too.
   - Title dot grids: each grid's frame loop stops once Barba removes its canvas. Before, every visit to Home, About or a case study started loops that never stopped (12 were still running after five page changes). A grid also skips the redraw while the eased mouse has moved less than 0.05px since the last one. The case-study hero grid redrew about 2,900 dots every frame even when nothing moved, and the picture is the same.
