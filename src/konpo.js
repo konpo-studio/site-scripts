@@ -1,8 +1,122 @@
+// Two switches, read from the konpo-min <script> tag in the site footer (a URL parameter of the same name wins, for testing):
+//   data-smooth-scroll="off" (default) native scrolling; "on" brings back Lenis's smoothed wheel scrolling
+//   data-headlines="gradient" (default) scroll headlines fade grey to dark line by line; "reveal" brings back the letter/word reveals
+// e.g. https://www.konpo.studio/about?smooth-scroll=on&headlines=reveal shows the old behaviour without republishing.
+(function kpOptions() {
+    function opt(name, fallback) {
+        try {
+            const q = new URLSearchParams(location.search).get(name);
+            if (q) return q;
+        } catch (e) {}
+        const tag = document.querySelector('script[src*="konpo-min"]');
+        return (tag && tag.getAttribute('data-' + name)) || fallback;
+    }
+    window.kpOpts = {smoothScroll: opt('smooth-scroll', 'off') === 'on', headlines: opt('headlines', 'gradient')};
+    if (!window.kpOpts.smoothScroll) {
+        const style = document.createElement('style');
+        // Lenis's own CSS only sets this in smooth mode; popups still shouldn't hand their scroll on to the page
+        style.textContent = '.lenis [data-lenis-prevent]{overscroll-behavior:contain}';
+        document.head.appendChild(style);
+    }
+})();
+// Native scrolling: Lenis still runs (scroll events, stop/start for popups, animated scrollTo for anchors) but leaves the
+// wheel alone, and then reports velocity 0. The About team marquee speeds up with velocity, so measure it from the scroll.
+function kpNativeVelocity(lenis) {
+    if (window.kpOpts.smoothScroll) return;
+    let last = lenis.animatedScroll, moved = false;
+    lenis.on('scroll', () => {
+        lenis.velocity = lenis.animatedScroll - last;
+        last = lenis.animatedScroll;
+        moved = true;
+    });
+    // ease off between scroll events instead of dropping to 0, like Lenis's own velocity at the end of a scroll
+    gsap.ticker.add(() => {
+        if (!moved && !lenis.isScrolling) lenis.velocity = Math.abs(lenis.velocity) < .5 ? 0 : lenis.velocity * .85;
+        moved = false;
+    });
+}
+// Gradient headlines. The scroll headlines below are split into lines only (no letters or words), and each line fills from
+// grey to its own colour as the headline crosses the screen, one line after another. The smaller text that used to reveal
+// with them (labels, sub copy, quotes' names) stays still. Hero and page-load reveals are untouched. Rich text headlines that
+// carry images or embeds (e.g. the First Chair intro) keep the old effect. In dist/konpo-min.js this runs first (prefixed),
+// so kpAwardsSkipHidden and kpWrapSplit wrap it.
+(function kpHeadlineGradient() {
+    const Original = window.SplitText, ST = window.ScrollTrigger;
+    if (window.kpOpts.headlines !== 'gradient' || !Original || !ST || Original.__kpGrad) return;
+    const GRADIENT = '.home-abt-title,.home-ser-title,.home-proj-title,.home-proj-sub,.abt-val-title,.abt-team-sub-title,' +
+        '.abt-award-title,.abt-testi-title,.projdtl-intro-main-txt,.projdtl-brand-title,.projdtl-testi-main-txt,' +
+        '.ser-abt-title,.ser-prog-title,.ser-quote-title';
+    const STILL = '.home-abt-label,.home-abt-sub-wrap-p,.abt-statis-item-title,.abt-statis-item-sub,.abt-val-label,' +
+        '.abt-award .abt-award-sub-item-txt,.abt-testi-label,.abt-testi-main-name,.abt-testi-main-sub,.abt-testi-main-text,' +
+        '.projdtl-intro-label,.projdtl-brand-rictxt p,.projdtl-testi-client-name,.projdtl-testi-client-job,' +
+        '.ser-abt-sub,.ser-prog-sub,.ser-why-item-label,.ser-why-item-title,.ser-why-item-sub';
+    const MEDIA = 'img,svg,video,iframe,picture,.w-embed';
+    const style = document.createElement('style');
+    style.textContent = '.kp-gl{width:fit-content;max-width:100%;' +
+        'background-image:linear-gradient(90deg,var(--kp-d) 44.4%,var(--kp-g) 55.6%);background-size:225% 100%;' +
+        'background-repeat:no-repeat;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;' +
+        '--kp-q:clamp(0,calc(var(--kp-p,0) * var(--kp-n,1) - var(--kp-i,0)),1);' +
+        'background-position:calc((1 - var(--kp-q)) * 100%) 0}';
+    document.head.appendChild(style);
+    const done = new WeakSet();
+    const list = t => typeof t === 'string' ? [...document.querySelectorAll(t)] : t && t.jquery ? t.get() : t && t.nodeType ? [t] : t ? [...t] : [];
+    // the elements that get the gradient: the headline itself, or the text blocks of a rich text headline
+    function blocks(el) {
+        if (!el.classList.contains('w-richtext')) return el.querySelector(MEDIA) ? null : [el];
+        const brand = el.matches('.projdtl-brand-title'), sel = brand ? 'h1,h2,h3,h4,h5,h6' : 'h1,h2,h3,h4,h5,h6,p,blockquote';
+        if (!brand && el.querySelector(MEDIA)) return null;
+        return [...el.querySelectorAll(sel)].filter(b => !b.parentElement.closest(sel) && b.textContent.trim() && !b.querySelector(MEDIA));
+    }
+    function gradient(block) {
+        const cs = getComputedStyle(block), rgb = (cs.color.match(/[\d.]+/g) || [0, 0, 0]).map(Number);
+        const light = (.299 * rgb[0] + .587 * rgb[1] + .114 * rgb[2]) / 255 > .6;
+        block.style.setProperty('--kp-d', cs.color);
+        block.style.setProperty('--kp-g', light ? 'rgba(255,255,255,.3)' : '#C1C1C1');
+        new Original(block, {
+            type: 'lines', linesClass: 'g-lines kp-gl', aria: 'none', autoSplit: true,
+            deepSlice: false, reduceWhiteSpace: false,
+            prepareText: x => x.replace(/\s\s+/g, ' ').replace(/\r|\n|\t\t/g, ''),
+            // runs again when fonts load or the width changes, so the lines always match the layout
+            onSplit: self => {
+                const align = getComputedStyle(block).textAlign;
+                self.lines.forEach((line, i) => {
+                    line.style.setProperty('--kp-i', i);
+                    if (align === 'center') line.style.marginLeft = line.style.marginRight = 'auto';
+                    else if (align === 'right' || align === 'end') line.style.marginLeft = 'auto';
+                });
+                block.style.setProperty('--kp-n', self.lines.length);
+            },
+        });
+        const set = t => block.style.setProperty('--kp-p', t.progress.toFixed(4));
+        ST.create({trigger: block, start: 'top 85%', end: 'top 15%', onUpdate: set, onRefresh: set});
+    }
+    function Wrapped(target, opts) {
+        const all = list(target), rest = [];
+        let handled = 0;
+        all.forEach(el => {
+            if (done.has(el)) return handled++;
+            if (el.matches && el.getClientRects().length) {
+                if (el.matches(GRADIENT)) {
+                    const b = blocks(el);
+                    if (b) { done.add(el); b.forEach(gradient); return handled++; }
+                } else if (el.matches(STILL)) { done.add(el); return handled++; }
+            }
+            rest.push(el);
+        });
+        if (!handled) return new Original(target, opts);
+        if (rest.length) return new Original(rest, opts);
+        return {chars: [], words: [], lines: [], elements: all, isSplit: false, revert() { return this; }, split() { return this; }};
+    }
+    Wrapped.prototype = Original.prototype;
+    Object.setPrototypeOf(Wrapped, Original);
+    Wrapped.__kpGrad = 1;
+    window.SplitText = Wrapped;
+})();
 // About awards table: each row also holds copies that are hidden on desktop (the mobile award name, a CMS-hidden cell, the
 // mobile-only links). GSAP can't read a hidden element's transform, so when the reveal starts it would show each hidden letter,
 // move it to <html>, measure it and put it back (~0.3ms a letter, ~1,000 letters). A 0.01px transform set up front lets GSAP skip
-// that. Every letter stays in the stagger, so the timing and what's visible are unchanged. In dist/konpo-min.js this runs first
-// (prefixed), so kpWrapSplit below wraps it.
+// that. Every letter stays in the stagger, so the timing and what's visible are unchanged. In dist/konpo-min.js this runs after
+// kpOptions and kpHeadlineGradient (prefixed), so it wraps the gradient and kpWrapSplit below wraps it.
 (function kpAwardsSkipHidden() {
     const Original = window.SplitText;
     if (!Original || Original.__kpAwSkip) return;
@@ -69,9 +183,11 @@ const mainScript = () => {
 
     const isStaging = window.location.href.indexOf('webflow') > -1 ? true : false
 
+    // smoothWheel follows the data-smooth-scroll switch (kpOptions at the top); off = native wheel scrolling
     const lenis = new Lenis({
         lerp: false,
-        duration: 1.6
+        duration: 1.6,
+        smoothWheel: window.kpOpts.smoothScroll
     })
     // Drive Lenis from GSAP's ticker and update ScrollTrigger on every Lenis scroll, so scrolling and
     // scroll-driven animations land on the same frame (Lenis's documented GSAP setup).
@@ -80,6 +196,7 @@ const mainScript = () => {
     }
     lenis.on('scroll', ScrollTrigger.update)
     gsap.ticker.add(raf)
+    kpNativeVelocity(lenis)
 
     //Utils
     const lerp = (a,b,t = 0.08) => {
