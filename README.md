@@ -27,7 +27,7 @@ Rolling back is the same in reverse: point the tag back at the previous version 
 
 ## Releases
 
-- **v1.6.0** (not released yet): native scrolling and gradient headlines, each behind a switch on the konpo-min footer tag.
+- **v1.6.0**: native scrolling and gradient headlines, each behind a switch on the konpo-min footer tag.
   - `data-smooth-scroll="off"` (the default) lets the browser scroll the page itself. Lenis stays loaded for everything else (popups locking the page, the animated jumps to anchors and case-study sections, scroll events), and the About team marquee still speeds up with scroll speed. Set it to `"on"` for the old Lenis smooth wheel.
   - `data-headlines="gradient"` (the default) turns the scroll headlines on Home, About, case studies and services into the grey-to-dark fill, line by line, instead of letter and word reveals. The smaller text that revealed with them (labels, sub copy, names) now just sits there. Hero and page-load reveals, and rich-text headlines with images in them, are unchanged. Set it to `"reveal"` for the old reveals.
   - For a quick look without republishing, add `?smooth-scroll=on` or `?headlines=reveal` to any URL.
