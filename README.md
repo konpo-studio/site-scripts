@@ -10,6 +10,7 @@ The scripts that run the animations on konpo.studio, owned by Konpo. bear.plus b
   - `ads.js` is only loaded on /ai-design-system.
   - `kbdfix.js` is the keyboard and focus fixes (Escape closes the menu and popups, focus stays inside an open popup and comes back after, closed popups are `inert`). Every page loads it. It used to be a Webflow inline script, and moved here in v1.5.0 because it outgrew Webflow's 2,000-character limit.
   - `navautohide.js` hides the header while you scroll down and brings it back when you scroll up. Every page loads it through the Webflow registered script NavAutoHide. It moved here in v1.6.1 (as NavAutoHide 2.0.1) because it outgrew Webflow's 2,000-character limit.
+  - `lazyvideos.js` loads the muted autoplay videos that keep their file in `data-src` (Home project tiles, case-study galleries) as they come near, and shows a case-study video's still (`data-poster`, its first frame) until it plays. Every page loads it through the Webflow registered script LazyVideos. It moved here in v1.6.4 (as LazyVideos 2.0.0) because it outgrew Webflow's 2,000-character limit. Readable source: `src/lazyvideos.js`.
 - `src/` is the source bear.plus sent over (zip, 19 Oct 2026). `konpo.js` is the readable source of `konpo-min.js`. It's very close to the live build but not identical (the easter-egg loader differs), so check that before shipping a build made from it.
 
 ## Loaded from elsewhere
@@ -28,6 +29,13 @@ Rolling back is the same in reverse: point the tag back at the previous version 
 
 ## Releases
 
+- **v1.6.4**: `lazyvideos.js` (LazyVideos 2.0.0), so a case-study video never leaves an empty block. konpo-min is unchanged from v1.6.3.
+  - A video with `data-poster` gets its still about five screens ahead (stills are WebP first frames, a few KB to a few hundred KB). Before, a gallery video stayed invisible until it played, and never showed at all with reduced motion, Save-Data or iPhone Low Power Mode. Now those visitors see the still.
+  - Videos within about a screen and a half load one at a time, nearest first, up to their first frame, then wait paused without downloading more. They play when they reach the screen and pause when they leave it.
+  - On a direct visit nothing loads ahead until the loader has lifted, so videos don't compete with the page scripts.
+  - Home project tiles behave as before (the tile image stays until the tile's video plays), and so do videos without a still.
+
+  First Chair is the first page with stills: its 28 gallery videos carry `data-poster`, and 26 of them now load lighter copies from Webflow's CDN (same H.264, VMAF 95+, 22% less in all). Measured on a slow phone (6 Mbps, 4x CPU), scrolling the whole page: tiles showing nothing while on screen went from 12 to 0 at reading pace and from 45 to 0 when flicking fast, and video downloaded fell from 12MB to 1.7–3.9MB. On desktop nothing changes (no empty tiles before or after). Roll back to LazyVideos 1.2.0 (the inline Webflow script).
 - **v1.6.3**: a third value for the headline switch, `data-headlines="cases"`. Case studies get the grey-to-dark gradient headlines (their letter reveals were most of the wait behind the page-change curtain: opening First Chair on a slow phone went from about 8s to 4.4s), and every other page keeps its reveals, except that Home's scroll headlines (the intro statement, "Services", "Selected Work") now reveal word by word instead of letter by letter. Those words fade with opacity rather than autoAlpha, so they stay readable for screen readers. `"reveal"` and `"gradient"` behave exactly as in v1.6.2. Preview with `?headlines=cases`.
 - **v1.6.2**: the About page FAQ opens and closes from konpo-min, like the services and case-study ones. The About view now binds the `.ser-faq` accordion (one answer open at a time, 0.6s, and ScrollTrigger measures the page again once an answer has opened or closed). It replaces the inline AboutFaq 1.0.0 script that sat at the end of the Webflow head code, which goes with this release. Nothing else changes. Roll back to v1.6.1 and put the inline script back.
 - **v1.6.1**: less work per frame, with nothing changing on screen. The v1.6.0 switches and their defaults are unchanged.
