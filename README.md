@@ -29,6 +29,12 @@ Rolling back is the same in reverse: point the tag back at the previous version 
 
 ## Releases
 
+- **v1.7.0**: the page rail (kpRail), and the new case-study layout.
+  - A rail of section stops runs down the left column on the current case studies (First Chair, Fyler, Surge, Clinical Ink, Relias), Home, About and the four service pages. Each stop is an icon with a tooltip: the section you're in lights up purple, the ones you've passed go light, and clicking one (or Enter on it) scrolls there. It replaces the old progress line on those pages, which comes back everywhere else.
+  - Below 992px the same stops sit in a bar at the bottom of the screen. It comes up when the header leaves (scrolling down) and goes when it comes back. /ai-design-system has no side column, so it only gets the bar, and it shows the bar by scroll direction since its header never hides.
+  - First Chair weaves the people quoted in it into the rail: Sunny Fassler, Sivan Hurvitz and Jean Massad get avatar stops at their pull quotes, and Amir's testimonial ends it. Phones leave the quote stops out, they'd be too tight.
+  - Case-study header: the client's logo where there's a clean one (First Chair, Surge), otherwise the name without the comma. Every case study now puts each section headline above its paragraphs, at a wider measure, and the body paragraphs fill with the reading-order gradient like the headlines. On phones the hero title and the next project lose their dot grid, and the next project's name isn't bold.
+  - konpo-min goes from 28.8KB to 35.6KB gzipped. Roll back to v1.6.3 (v1.6.4 didn't change konpo-min).
 - **v1.6.4**: `lazyvideos.js` (LazyVideos 2.0.0), so a case-study video never leaves an empty block. konpo-min is unchanged from v1.6.3.
   - A video with `data-poster` gets its still about five screens ahead (stills are WebP first frames, a few KB to a few hundred KB). Before, a gallery video stayed invisible until it played, and never showed at all with reduced motion, Save-Data or iPhone Low Power Mode. Now those visitors see the still.
   - Videos within about a screen and a half load one at a time, nearest first, up to their first frame, then wait paused without downloading more. They play when they reach the screen and pause when they leave it.

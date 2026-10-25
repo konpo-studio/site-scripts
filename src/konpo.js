@@ -45,54 +45,138 @@ function kpNativeVelocity(lenis) {
     const Original = window.SplitText, ST = window.ScrollTrigger;
     const mode = window.kpOpts.headlines;
     if ((mode !== 'gradient' && mode !== 'cases') || !Original || !ST || Original.__kpGrad) return;
-    // "cases": only the case-study headlines (their letter reveals were the slow part of opening a case study)
     const pick = s => mode === 'cases' ? s.split(',').filter(x => x.startsWith('.projdtl-')).join(',') : s;
+    // case-study body paragraphs (.projdtl-brand-rictxt p) fill too (1.7.0)
     const GRADIENT = pick('.home-abt-title,.home-ser-title,.home-proj-title,.home-proj-sub,.abt-val-title,.abt-team-sub-title,' +
-        '.abt-award-title,.abt-testi-title,.projdtl-intro-main-txt,.projdtl-brand-title,.projdtl-testi-main-txt,' +
+        '.abt-award-title,.abt-testi-title,.projdtl-intro-main-txt,.projdtl-brand-title,.projdtl-brand-rictxt p,.projdtl-testi-main-txt,' +
         '.ser-abt-title,.ser-prog-title,.ser-quote-title');
     const STILL = pick('.home-abt-label,.home-abt-sub-wrap-p,.abt-statis-item-title,.abt-statis-item-sub,.abt-val-label,' +
         '.abt-award .abt-award-sub-item-txt,.abt-testi-label,.abt-testi-main-name,.abt-testi-main-sub,.abt-testi-main-text,' +
-        '.projdtl-intro-label,.projdtl-brand-rictxt p,.projdtl-testi-client-name,.projdtl-testi-client-job,' +
+        '.projdtl-intro-label,.projdtl-testi-client-name,.projdtl-testi-client-job,' +
         '.ser-abt-sub,.ser-prog-sub,.ser-why-item-label,.ser-why-item-title,.ser-why-item-sub');
     const MEDIA = 'img,svg,video,iframe,picture,.w-embed';
+    // body paragraphs split when they come within a screen and a half, one per task, so opening a case study doesn't pay for
+    // splitting every paragraph up front; until then they wait in the grey
+    const LATER = pick('.projdtl-brand-rictxt p');
+    // Reading order: every line in a section fills one after another (headline, then each paragraph top to bottom), and a
+    // line is fully dark by the time its top reaches END of the screen. A line starts at most WIN above that point, and when a
+    // line is held back by the one before it (side-by-side headline and body), it catches up at CATCH px of scroll a line.
+    const END = .7, WIN = .22, CATCH = 10;
     const style = document.createElement('style');
     style.textContent = '.kp-gl{width:fit-content;max-width:100%;' +
-        'background-image:linear-gradient(90deg,var(--kp-d) 44.4%,var(--kp-g) 55.6%);background-size:225% 100%;' +
-        'background-repeat:no-repeat;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;' +
-        '--kp-q:clamp(0,calc(var(--kp-p,0) * var(--kp-n,1) - var(--kp-i,0)),1);' +
-        'background-position:calc((1 - var(--kp-q)) * 100%) 0}';
+    'background-image:linear-gradient(90deg,var(--kp-d) 44.4%,var(--kp-g) 55.6%);background-size:225% 100%;' +
+    'background-repeat:no-repeat;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;' +
+    'background-position:calc((1 - var(--kp-q,0)) * 100%) 0}' +
+    // inline pieces with their own background (person chips) keep their own text colour and fade in as the fill passes them
+    // (--kp-a: where the piece starts across its line, --kp-w: its width plus the soft edge, both as a share of the line)
+    // body paragraphs waiting to be split: the same light grey, without reading their colour at load
+    '.kp-gw{-webkit-text-fill-color:color-mix(in srgb,currentColor 22%,transparent)}' +
+    '.kp-gl .kp-gl-own{-webkit-text-fill-color:currentColor;opacity:calc(.3 + .7 * clamp(0, (1.25 * var(--kp-q,0) - var(--kp-a,0)) / var(--kp-w,1), 1))}';
     document.head.appendChild(style);
-    const done = new WeakSet();
+    const done = new WeakSet(), groups = new WeakMap();
     const list = t => typeof t === 'string' ? [...document.querySelectorAll(t)] : t && t.jquery ? t.get() : t && t.nodeType ? [t] : t ? [...t] : [];
-    // the elements that get the gradient: the headline itself, or the text blocks of a rich text headline
+    // media that breaks the text flow (an image inside an inline link or chip doesn't)
+    const blockMedia = b => [...b.querySelectorAll(MEDIA)].some(m => { const i = m.parentElement.closest('a,span'); return !i || !b.contains(i); });
     function blocks(el) {
-        if (!el.classList.contains('w-richtext')) return el.querySelector(MEDIA) ? null : [el];
+        if (!el.classList.contains('w-richtext')) return blockMedia(el) ? null : [el];
         const brand = el.matches('.projdtl-brand-title'), sel = brand ? 'h1,h2,h3,h4,h5,h6' : 'h1,h2,h3,h4,h5,h6,p,blockquote';
-        if (!brand && el.querySelector(MEDIA)) return null;
-        return [...el.querySelectorAll(sel)].filter(b => !b.parentElement.closest(sel) && b.textContent.trim() && !b.querySelector(MEDIA));
+        if (!brand && blockMedia(el)) return null;
+        return [...el.querySelectorAll(sel)].filter(b => !b.parentElement.closest(sel) && b.textContent.trim() && !blockMedia(b));
+    }
+    // the lines of a group in reading order, each with the scroll range it fills over
+    function measure(g) {
+        const vh = innerHeight, y = scrollY;
+        g.blocks = g.blocks.filter(b => b.isConnected).sort((a, b) => a.compareDocumentPosition(b) & 4 ? -1 : 1);
+        const lines = [];
+        g.blocks.forEach(b => (b._kpLines || []).forEach(l => { if (l.isConnected && l.getClientRects().length) lines.push(l); }));
+        let prev = -Infinity;
+        g.plan = lines.map(l => {
+            const s = l.getBoundingClientRect().top + y - END * vh;
+            const from = Math.max(s - WIN * vh, prev), to = Math.max(s, prev + CATCH);
+            prev = to;
+            return {l, from, to, q: -1};
+        });
+        return g.plan;
+    }
+    function paint(g, y) {
+        (g.plan || []).forEach(p => {
+            const q = y <= p.from ? 0 : y >= p.to ? 1 : (y - p.from) / (p.to - p.from);
+            if (Math.abs(q - p.q) < .002) return;
+            p.q = q;
+            p.l.style.setProperty('--kp-q', q.toFixed(3));
+        });
+    }
+    function build(g) {
+        g.queued = false;
+        if (g.st) g.st.kill();
+        g.st = ST.create({
+            trigger: g.el,
+            start: () => { const p = measure(g); return p.length ? p[0].from : 0; },
+            end: () => { const p = g.plan; return p && p.length ? p[p.length - 1].to + 1 : 1; },
+            onUpdate: self => paint(g, self.scroll()),
+            onRefresh: self => paint(g, self.scroll()),
+        });
+    }
+    function queue(g) {
+        if (g.queued) return;
+        g.queued = true;
+        requestAnimationFrame(() => build(g));
     }
     function gradient(block) {
         const cs = getComputedStyle(block), rgb = (cs.color.match(/[\d.]+/g) || [0, 0, 0]).map(Number);
         const light = (.299 * rgb[0] + .587 * rgb[1] + .114 * rgb[2]) / 255 > .6;
         block.style.setProperty('--kp-d', cs.color);
         block.style.setProperty('--kp-g', light ? 'rgba(255,255,255,.3)' : '#C1C1C1');
+        const el = block.closest('section') || block.parentElement;
+        let g = groups.get(el);
+        if (!g) groups.set(el, g = {el, blocks: []});
+        g.blocks.push(block);
         new Original(block, {
             type: 'lines', linesClass: 'g-lines kp-gl', aria: 'none', autoSplit: true,
             deepSlice: false, reduceWhiteSpace: false,
             prepareText: x => x.replace(/\s\s+/g, ' ').replace(/\r|\n|\t\t/g, ''),
-            // runs again when fonts load or the width changes, so the lines always match the layout
             onSplit: self => {
                 const align = getComputedStyle(block).textAlign;
-                self.lines.forEach((line, i) => {
-                    line.style.setProperty('--kp-i', i);
+                self.lines.forEach(line => {
                     if (align === 'center') line.style.marginLeft = line.style.marginRight = 'auto';
                     else if (align === 'right' || align === 'end') line.style.marginLeft = 'auto';
+                    line.querySelectorAll('a,span').forEach(e => {
+                        const c = getComputedStyle(e);
+                        if (!e.querySelector('img') && (c.backgroundColor === 'rgba(0, 0, 0, 0)' || c.backgroundColor === 'transparent') && c.backgroundImage === 'none') return;
+                        if (e.parentElement.closest('.kp-gl-own')) return;
+                        const lr = line.getBoundingClientRect(), r = e.getBoundingClientRect(), w = lr.width || 1;
+                        e.classList.add('kp-gl-own');
+                        e.style.setProperty('--kp-a', ((r.left - lr.left) / w).toFixed(3));
+                        e.style.setProperty('--kp-w', ((r.right - r.left) / w + .25).toFixed(3));
+                    });
                 });
-                block.style.setProperty('--kp-n', self.lines.length);
+                block._kpLines = self.lines;
+                queue(g);
             },
         });
-        const set = t => block.style.setProperty('--kp-p', t.progress.toFixed(4));
-        ST.create({trigger: block, start: 'top 85%', end: 'top 15%', onUpdate: set, onRefresh: set});
+    }
+    const waiting = [];
+    let pumping = false;
+    function pump() {
+        if (pumping) return;
+        pumping = true;
+        setTimeout(function step() {
+            const b = waiting.shift();
+            if (b && b.isConnected) { b.classList.remove('kp-gw'); gradient(b); }
+            if (waiting.length) setTimeout(step, 0); else pumping = false;
+            }, 0);
+    }
+    const near = new IntersectionObserver(es => {
+        es.forEach(e => { if (e.isIntersecting) { near.unobserve(e.target); held.delete(e.target); waiting.push(e.target); } });
+        pump();
+        }, {rootMargin: '150% 0px'});
+    // paragraphs that left with an earlier page are let go
+    const held = new Set();
+    function later(block) {
+        held.forEach(b => { if (!b.isConnected) { near.unobserve(b); held.delete(b); } });
+        block.classList.add('kp-gw');
+        held.add(block);
+        near.observe(block);
     }
     function Wrapped(target, opts) {
         const all = list(target), rest = [];
@@ -102,7 +186,7 @@ function kpNativeVelocity(lenis) {
             if (el.matches && el.getClientRects().length) {
                 if (el.matches(GRADIENT)) {
                     const b = blocks(el);
-                    if (b) { done.add(el); b.forEach(gradient); return handled++; }
+                    if (b) { done.add(el); b.forEach(LATER && el.matches(LATER) ? later : gradient); return handled++; }
                 } else if (el.matches(STILL)) { done.add(el); return handled++; }
             }
             rest.push(el);
@@ -115,6 +199,536 @@ function kpNativeVelocity(lenis) {
     Object.setPrototypeOf(Wrapped, Original);
     Wrapped.__kpGrad = 1;
     window.SplitText = Wrapped;
+})();
+// Page rail (1.7.0). In dist/konpo-min.js this runs after kpHeadlineGradient (prefixed, minified). Down the side column, a 5x5 dot-grid icon for each part of the page: a ring travels down the rail
+// with the scroll and turns into each icon as its part reaches the middle of the screen, where the icon's shape lights up
+// purple. Hover shows the part's name and a click jumps there. Below 992px (no side column) the rail lies along a short
+// bar at the bottom of the screen, shown while the nav is away (NavAutoHide's .nah-hide), so it comes in as you scroll
+// down and leaves as you scroll up. Pages: Home, About, the four services pages, /ai-design-system and the current case
+// studies (their rail ends with the testimonial author's photo). Every other page keeps the old progress line.
+// Also here:
+// - every page: when the nav slides away, the Konpo logo and the side column stay;
+// - every case study: headlines sit above their paragraphs on desktop, and on phones there's no dot grid behind the title
+//   or the next project, whose name isn't bold;
+// - the current case studies' header: the client's logo (or name) without the colon, no greeting, the section list centred.
+(function kpRail() {
+    const doc = document, root = doc.documentElement;
+    if (!doc.querySelector('.header')) return;
+    // current case studies; a logo only where the site has a clean vector one (the header blends, so it's drawn in black)
+    const CASES = {
+        // quotes: the people whose pull quotes get their own stop (their photo), after the section they're in
+        'first-chair': {logo: 'https://cdn.prod.website-files.com/65544f28fc8e963bc080b6f4/6ade7ed7d5dec69f065e9a43_first-chair-wordmark.svg', w: 298, h: 51,
+            quotes: ['Sunny Fassler', 'Sivan Hurvitz', 'Jean Massad']},
+        'surge-ai': {logo: 'https://cdn.prod.website-files.com/65544f28fc8e963bc080b6f4/6ade86a0d308557e57877a77_surge-wordmark.svg', w: 71, h: 23, big: 1},
+        'fyler-search-engine': {}, 'clinical-ink': {}, 'relias': {}
+    };
+    // 5x5 icons; case-study sections are keyed by their name in the header list
+    const ICONS = {
+        'intro': '..#.. ..... .##.. ..#.. .###.', 'challenge': '.###. ....# ..##. ..... ..#..',
+        'strategy': '##### #...# #.#.# #...# #####', 'branding': '..#.. .###. ##### .###. ..#..',
+        'web design': '##### ##### #...# #...# #####', 'product design': '.###. .#.#. .#.#. .#.#. .###.',
+        'design system': '##.## ##.## ..... ##.## ##.##', 'result': '..... ....# ...#. #.#.. .#...',
+        'about': '..... .#.#. ..... #...# .###.', 'services': '#.#.# ..... #.#.# ..... #.#.#',
+        'work': '##... ##### #...# #...# #####', 'testimonials': '..... ##.## ##.## .#..# #..#.',
+        'clients': '.#.#. ##### ##### .###. ..#..', 'contact': '##### ##.## #.#.# #...# #####',
+        'team': '.###. .#.#. .###. ..... #####', 'numbers': '....# ..#.# ..#.# #.#.# #.#.#',
+        'gallery': '....# ..... ..#.. .###. #####', 'pillars': '##### #.#.# #.#.# #.#.# #####',
+        'awards': '..#.. ##### .###. .#.#. #...#', 'process': '...## ...#. .###. .#... ##...',
+        'benefits': '..#.. ..#.. ##.## ..#.. ..#..', 'why us': '...#. ..#.. .###. ..#.. .#...',
+        'approach': '..... .###. #.#.# .###. .....', 'definition': '##### ..... ##### ..... ###..',
+        'what you get': '.#.#. ..#.. ##### #.#.# #####', 'case study': '..### ...## ..#.# .#... #....',
+        'review': '###.. #.#.. ###.. ...#. ....#'
+    };
+    // the other pages: [icon, name, section class (the first of several that's on the page)]
+    const svc = icon => [[icon, 'Intro', 'ser-marquee ser-hero'], ['clients', 'Clients', 'ser-client'],
+        ['approach', 'Approach', 'ser-abt'], ['benefits', 'Benefits', 'ser-fea'], ['process', 'Process', 'ser-prog'],
+        ['work', 'Projects', 'ser-proj'], ['testimonials', 'Testimonials', 'ser-quote ser-testi'], ['why us', 'Why us', 'ser-why'],
+        ['challenge', 'FAQs', 'ser-faq'], ['contact', 'Contact', 'footer']];
+    const SERVICES = {'branding': 'branding', 'design-system': 'design system', 'product-design': 'product design', 'website-design': 'web design'};
+    const PAGES = {
+        home: [['intro', 'Intro', 'home-hero'], ['about', 'About', 'home-abt'], ['services', 'Services', 'home-ser'],
+            ['work', 'Work', 'home-proj'], ['testimonials', 'Testimonial', 'home-testi'], ['clients', 'Clients', 'home-client'],
+            ['contact', 'Contact', 'footer']],
+        about: [['intro', 'Intro', 'abt-hero'], ['numbers', 'Numbers', 'abt-statis'], ['gallery', 'Gallery', 'abt-gall'],
+            ['pillars', 'Pillars', 'abt-val'], ['team', 'Team', 'abt-team'], ['challenge', 'FAQs', 'ser-faq'],
+            ['awards', 'Awards', 'abt-award'], ['testimonials', 'Testimonials', 'abt-testi'], ['contact', 'Contact', 'footer']],
+        ads: [['design system', 'Intro', 'ads-hero'], ['definition', 'What it is', 'ads-intro'], ['benefits', 'Benefits', 'ads-cta'],
+            ['what you get', 'What you get', 'ads-get'], ['case study', 'Surge story', 'ads-quote ads-surge'],
+            ['review', 'Readiness review', 'ads-review'], ['work', 'Examples', 'ads-client'], ['challenge', 'FAQs', 'ads-faq'],
+            ['contact', 'Book an audit', 'ads-footer']]
+    };
+    // NEAR: how close the ring gets before it turns into a stop; EDGE: where the line stops short of a stop (its half box + 3px);
+    // STEP: the spacing the rail grows to fit; extra stops (quotes) drop out where they'd sit closer than MIN
+    const NARROW = 992, NEAR = 14, EDGE = 14, STEP = 38, MIN = 34;
+    // The header is drawn with invert + difference, so its colours are written for that: white shows as the page, black as
+    // ink. The bottom bar draws its rail the same way, so both use these. The greys are the lab-approved rail colours.
+    const css =
+        '.header.nah-hide .header-toggle{translate:none!important}' +
+        '@media (min-width:' + NARROW + 'px){.header.nah-hide .header-side,.header.nah-hide .header-side-line{translate:none!important}}' +
+        'html.kp-rail-page .header-prog-inner,html.kp-rail-page .header-prog-bg,.kp-has-rail .header-prog-inner,' +
+        '.kp-has-rail .header-prog-bg{visibility:hidden!important;pointer-events:none!important}' +
+        '.header-prog.kp-has-rail{top:var(--kp-t)!important;bottom:auto!important;left:var(--kp-x)!important;right:auto!important;height:var(--kp-H)!important}' +
+        '.kp-rail{position:absolute;left:0;top:0;width:1px;height:100%;--kp-y:0px;--kp-h:0px;--kp-gap:9px;transition:opacity .25s}' +
+        'html.kp-rail-leaving .kp-rail,html.kp-rail-leaving .kp-bar{opacity:0}' +
+        // the line runs in pieces between the icons; the part you've scrolled through is a step darker, and it opens round the ring
+        '.kp-rail-track,.kp-rail-fill{position:absolute;left:0;top:0;width:1px;--kp-c:#efeef2;' +
+        '-webkit-mask-image:linear-gradient(#000 calc(var(--kp-y) - var(--kp-gap)),transparent 0 calc(var(--kp-y) + var(--kp-gap)),#000 0);' +
+        'mask-image:linear-gradient(#000 calc(var(--kp-y) - var(--kp-gap)),transparent 0 calc(var(--kp-y) + var(--kp-gap)),#000 0)}' +
+        '.kp-rail-fill{--kp-c:#d6d4dc;-webkit-mask-size:1px var(--kp-h);mask-size:1px var(--kp-h);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}' +
+        '.kp-ri,.kp-ra{position:absolute;left:0;top:0;width:22px;height:22px;margin:-11px 0 0 -11px;padding:0;border:0;background:#fff;' +
+        'cursor:pointer;pointer-events:auto;display:grid;place-items:center;border-radius:4px;z-index:1;-webkit-tap-highlight-color:transparent}' +
+        '.kp-ra{background:none;border-radius:50%}.kp-off{display:none!important}' +
+        '.kp-ri svg{width:20px;height:20px;display:block;overflow:visible}' +
+        '.kp-ri circle{transition:fill .35s ease var(--d,0s),fill-opacity .35s ease var(--d,0s)}' +
+        // done and upcoming parts look the same; the current one is its shape alone, in purple
+        '.kp-ri .o{fill:#efeef2}.kp-ri .l{fill:#bdbbc1}' +
+        '.kp-ri.here .l,.kp-ri:focus-visible .l{fill:var(--purple)}.kp-ri.here .o{fill-opacity:0}' +
+        '@media (hover:hover){.kp-ri:hover .l{fill:var(--purple)}.kp-ra:hover img{filter:grayscale(1) contrast(.8) brightness(1.1)}}' +
+        '.kp-ra img{width:15px;height:15px;border-radius:50%;object-fit:cover;object-position:62% 28%;display:block;box-shadow:0 0 0 1px rgba(0,0,0,.1);' +
+        'filter:grayscale(1) contrast(.55) brightness(1.35);transition:transform .45s cubic-bezier(.2,.7,.2,1),filter .45s}' +
+        '.kp-ra.here img{transform:scale(1.3);filter:none}' +
+        '.kp-rr{position:absolute;left:0;top:0;width:18px;height:18px;margin:-9px 0 0 -9px;box-sizing:border-box;border-radius:50%;' +
+        'border:1px solid rgba(0,0,0,.1);display:grid;place-items:center;pointer-events:none;transition:opacity .3s,transform .3s}' +
+        '.kp-rr::after{content:"";width:4px;height:4px;border-radius:50%;background:#202020}' +
+        '.kp-rr.gone{opacity:0;transform:scale(.6)}' +
+        '.kp-ri:focus-visible,.kp-ra:focus-visible{outline:1px solid #202020;outline-offset:1px}' +
+        // below 992px: the bar (the page colour, the nav's line on top); its inside blends like the header
+        '.kp-bar{position:fixed;left:0;right:0;bottom:0;height:44px;padding-bottom:env(safe-area-inset-bottom);box-sizing:content-box;' +
+        'z-index:900;background:var(--body-bg);transform:translateY(110%);visibility:hidden;' +
+        'transition:transform .38s cubic-bezier(.2,.7,.2,1),visibility 0s .38s,opacity .25s}' +
+        '.kp-bar.on{transform:none;visibility:visible;transition:transform .38s cubic-bezier(.2,.7,.2,1),visibility 0s,opacity .25s}' +
+        '@media (min-width:' + NARROW + 'px){.kp-bar{display:none}}' +
+        '.kp-bar-in{position:absolute;inset:0;filter:invert(1);mix-blend-mode:difference}' +
+        '.kp-bar-in>.line{position:absolute;left:0;top:0}' +
+        '.kp-bar .kp-rail{left:22px;top:22px;width:auto;right:22px;height:1px}' +
+        '.kp-bar .kp-rail-track,.kp-bar .kp-rail-fill{height:1px;' +
+        '-webkit-mask-image:linear-gradient(to right,#000 calc(var(--kp-y) - var(--kp-gap)),transparent 0 calc(var(--kp-y) + var(--kp-gap)),#000 0);' +
+        'mask-image:linear-gradient(to right,#000 calc(var(--kp-y) - var(--kp-gap)),transparent 0 calc(var(--kp-y) + var(--kp-gap)),#000 0)}' +
+        '.kp-bar .kp-rail-fill{-webkit-mask-size:var(--kp-h) 1px;mask-size:var(--kp-h) 1px}' +
+        // the name of a part, on hover (outside the blended header, so it stays a solid pill)
+        '.kp-tip{position:fixed;left:0;top:0;z-index:1000;transform:translate(-4px,-50%);white-space:nowrap;pointer-events:none;' +
+        'background:var(--secondary-black-900);color:var(--body-bg);font-size:13px;line-height:1;padding:6px 10px 7px;border-radius:100px;' +
+        'opacity:0;transition:opacity .2s,transform .25s cubic-bezier(.2,.7,.2,1)}' +
+        '.kp-tip.on{opacity:1;transform:translate(0,-50%)}' +
+        // current case studies' header
+        'html.kp-case .header-projdtl-comma{display:none!important}html.kp-case-logo .header-projdtl-name{display:none!important}' +
+        'html.kp-case .header-reg{visibility:hidden!important}' +
+        'html.kp-case .header-projdtl-toc{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}' +
+        '.kp-cs-logo{display:block;height:18px;width:auto;max-width:none}.kp-cs-logo.big{height:20px}.kp-cs-mark-m{display:none!important}' +
+        '@media (max-width:767px){html.kp-case .header-reg>:not(.kp-cs-mark-m){display:none!important}' +
+        'html.kp-case .header-reg>.kp-cs-mark-m{display:block!important;visibility:visible}.kp-cs-logo.kp-cs-mark-m{height:17px}' +
+        '.kp-cs-logo.big.kp-cs-mark-m{height:18px}' +
+        // every case study on phones
+        '.projdtl-hero-title-wrap{background-image:none!important}.projdtl-hero .title-dot-canvas{display:none!important}' +
+        '.projdtl-hero-title-label-name{font-weight:inherit!important}}';
+    const style = doc.createElement('style');
+    style.textContent = css;
+    doc.head.appendChild(style);
+
+    const reduce = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const later = f => (window.requestIdleCallback || (g => setTimeout(g, 200)))(f, {timeout: 1500});
+    const visible = e => !!e && !e.classList.contains('w-condition-invisible') && e.getClientRects().length > 0;
+
+    function pageOf(container, path) {
+        const ns = container ? container.getAttribute('data-barba-namespace') : '';
+        const last = (path || location.pathname).replace(/\/+$/, '').split('/').pop();
+        if (ns === 'projDtl') return {ns, cs: Object.prototype.hasOwnProperty.call(CASES, last) ? CASES[last] : null};
+        if (ns === 'service') return {ns, map: SERVICES[last] ? svc(SERVICES[last]) : null};
+        return {ns, map: PAGES[ns] || null};
+    }
+    function mark(p) {
+        root.classList.toggle('kp-rail-page', !!(p.map || p.cs));
+        root.classList.toggle('kp-case', !!p.cs);
+        root.classList.toggle('kp-case-logo', !!(p.cs && p.cs.logo));
+    }
+    // the client's logo in the header (phones: in the top bar, where the greeting was); without a logo, the name stays on
+    // wider screens and phones get it as text
+    function header(p, c) {
+        doc.querySelectorAll('.kp-cs-mark').forEach(e => e.remove());
+        if (!p.cs) return;
+        const n = c && c.querySelector('.projdtl-sum-label-txt'), name = n ? n.textContent.trim() : '';
+        let m;
+        if (p.cs.logo) {
+            m = doc.createElement('img');
+            m.src = p.cs.logo;
+            m.alt = name;
+            m.width = p.cs.w;
+            m.height = p.cs.h;
+            m.decoding = 'async';
+            m.className = 'kp-cs-mark kp-cs-logo' + (p.cs.big ? ' big' : '');
+            const pd = doc.querySelector('.header-projdtl');
+            if (pd) pd.insertBefore(m, pd.firstChild);
+            m = m.cloneNode(true);
+        } else {
+            m = doc.createElement('span');
+            m.className = 'kp-cs-mark txt txt-16';
+            m.textContent = name;
+        }
+        m.classList.add('kp-cs-mark-m');
+        const reg = doc.querySelector('.header-reg');
+        if (reg) reg.insertBefore(m, reg.firstChild);
+    }
+
+    // headlines above paragraphs (desktop): the paragraphs move down one grid row, so the headline ends before the text
+    // starts and can run on up to where the paragraphs start
+    function stack(c) {
+        const wide = innerWidth >= NARROW;
+        let changed = false;
+        (c || doc).querySelectorAll('.projdtl-brand > .container').forEach(k => {
+            const kids = [].slice.call(k.children);
+            kids.forEach(e => {
+                if (!e._kpStack) return;
+                e.style.gridRow = e.style.gridColumn = e.style.maxWidth = '';
+                e._kpStack = 0;
+                changed = true;
+            });
+            if (!wide) return;
+            const t = k.querySelector(':scope > .projdtl-brand-title'), r = k.querySelector(':scope > .projdtl-brand-rictxt');
+            if (!t || !r) return;
+            const tc = getComputedStyle(t), rc = getComputedStyle(r), row = parseInt(tc.gridRowStart, 10);
+            if (isNaN(row) || row !== parseInt(rc.gridRowStart, 10)) return;
+            const cols = [tc.gridColumnStart, rc.gridColumnStart], rows = kids.map(e => {
+                const s = getComputedStyle(e);
+                return [parseInt(s.gridRowStart, 10), parseInt(s.gridRowEnd, 10)];
+            });
+            kids.forEach((e, i) => {
+                const s = rows[i][0], en = rows[i][1];
+                if (e === r) e.style.gridRow = (row + 1) + ' / ' + (row + 2);
+                else if (e === t) {
+                    e.style.gridColumn = cols[0] + ' / ' + cols[1];
+                    e.style.maxWidth = 'none';
+                } else if (s > row) e.style.gridRow = (s + 1) + ' / ' + (isNaN(en) ? 'span 1' : en + 1);
+                else return;
+                e._kpStack = 1;
+                changed = true;
+            });
+        });
+        return changed;
+    }
+
+    function icon(key) {
+        const rows = (ICONS[key] || '..... ..... ..#.. ..... .....').split(' ');
+        let c = '';
+        for (let y = 0; y < 5; y++) for (let x = 0; x < 5; x++) {
+            // lit dots change colour in a ripple out from the middle
+            c += '<circle cx="' + (x * 3 + 1.5) + '" cy="' + (y * 3 + 1.5) + '" r="1.1" class="' + (rows[y][x] === '#' ? 'l' : 'o') +
+                '" style="--d:' + (Math.hypot(x - 2, y - 2) * .04).toFixed(2) + 's"/>';
+        }
+        return '<svg viewBox="0 0 15 15" aria-hidden="true" focusable="false">' + c + '</svg>';
+    }
+    // the smallest file a responsive image offers (the avatar is 15px)
+    function small(img) {
+        let best = null;
+        (img.getAttribute('srcset') || '').split(',').forEach(c => {
+            const p = c.trim().split(/\s+/), w = parseInt(p[1], 10);
+            if (p[0] && w && (!best || w < best[1])) best = [p[0], w];
+        });
+        return best ? best[0] : img.getAttribute('src') || img.currentSrc;
+    }
+
+    let R = null, tipEl = null, aim = 0;
+    function tip(m, text) {
+        const show = () => {
+            if (!(window.matchMedia && matchMedia('(hover: hover) and (min-width: ' + NARROW + 'px)').matches)) return;
+            if (!tipEl) {
+                tipEl = doc.createElement('div');
+                tipEl.className = 'kp-tip';
+                tipEl.setAttribute('aria-hidden', 'true');
+                doc.body.appendChild(tipEl);
+            }
+            const r = m.getBoundingClientRect();
+            tipEl.textContent = text;
+            tipEl.style.left = (r.right + 8) + 'px';
+            tipEl.style.top = (r.top + r.height / 2) + 'px';
+            tipEl.classList.add('on');
+        };
+        const hide = () => tipEl && tipEl.classList.remove('on');
+        m.addEventListener('mouseenter', show);
+        m.addEventListener('focus', show);
+        m.addEventListener('mouseleave', hide);
+        m.addEventListener('blur', hide);
+        m.addEventListener('click', hide);
+    }
+    function stopsOf(p, c) {
+        const out = [];
+        if (p.cs) {
+            c.querySelectorAll('section[data-proj-section]').forEach(s => {
+                if (!visible(s)) return;
+                const n = s.getAttribute('data-proj-section');
+                const t = doc.querySelector('.header-projdtl-toc-item[data-proj-step="' + n + '"] .header-projdtl-toc-txt');
+                const label = t ? t.textContent.trim() : 'Section ' + n;
+                out.push({el: s, label, key: label.toLowerCase(), step: n});
+            });
+            if (out.length < 2) return [];
+            (p.cs.quotes ? [].slice.call(c.querySelectorAll('.fc-quote')) : []).forEach(q => {
+                const n = q.querySelector('.fc-quote-name'), who = n ? n.textContent.trim() : '', av = q.querySelector('img');
+                if (av && visible(q) && p.cs.quotes.indexOf(who) > -1) out.push({el: q, label: who, aria: who + "'s quote", photo: av, mid: 1, extra: 1});
+            });
+            out.sort((a, b) => a.el.compareDocumentPosition(b.el) & 4 ? -1 : 1);
+            const testi = c.querySelector('section.projdtl-testi');
+            const photo = testi && [].filter.call(testi.querySelectorAll('img'), i => i.getClientRects().length)[0];
+            if (photo) {
+                const nm = testi.querySelector('.projdtl-testi-client-name'), who = nm ? nm.textContent.trim() : '';
+                out.push({el: testi, label: who || 'Testimonial', aria: who ? who + "'s testimonial" : 'the testimonial', photo, mid: 1});
+            }
+        } else {
+            p.map.forEach(s => {
+                const el = s[2].split(' ').map(k => c.querySelector('.' + k) || doc.querySelector('.' + k)).filter(visible)[0];
+                if (el) out.push({el, label: s[1], key: s[0]});
+            });
+            if (out.length < 3) return [];
+            out[0].top = 1;
+        }
+        return out;
+    }
+    // a jump's target is fixed when it starts, and media above the part can load in on the way and push it further down,
+    // so once the scroll settles, aim again (twice at most) until the part crosses the middle of the screen. Scrolling by
+    // hand calls it off
+    function go(s, tries) {
+        const me = ++aim, L = window.kpLenis, hdr = (doc.querySelector('.header-top') || {}).offsetHeight || 0;
+        const a = s.step != null && doc.querySelector('[data-proj-step="' + s.step + '"]');
+        // case-study sections go through the header list, which also sets the address (#scN)
+        if (a && window.jQuery) jQuery(a).trigger('click');
+        else {
+            const to = s.top ? 0 : s.el, offset = s.top ? 0 : s.mid ? -Math.max(0, (innerHeight - s.el.offsetHeight) / 2) : -hdr;
+            if (L) L.scrollTo(to, {offset, immediate: reduce(), force: true});
+            else scrollTo({top: s.top ? 0 : s.el.getBoundingClientRect().top + scrollY + offset, behavior: reduce() ? 'auto' : 'smooth'});
+        }
+        let last = -1, still = 0;
+        const t = setInterval(() => {
+            if (me !== aim) return clearInterval(t);
+            still = scrollY === last ? still + 1 : 0;
+            last = scrollY;
+            if (still < 3) return;
+            clearInterval(t);
+            const r = s.el.getBoundingClientRect(), end = scrollY >= root.scrollHeight - innerHeight - 2;
+            if (!s.top && !end && (r.top > innerHeight / 2 || r.bottom < innerHeight / 2) && (tries || 0) < 2) go(s, (tries || 0) + 1);
+        }, 120);
+    }
+    ['wheel', 'touchstart', 'keydown'].forEach(e => addEventListener(e, () => { aim++; }, {passive: true}));
+
+    function build(p, c) {
+        if (R || !(p.map || p.cs)) return;
+        // pages without the side column (the /ai-design-system landing page) get the bar below 992px only
+        const prog = doc.querySelector('.header-prog'), side = prog && prog.closest('.header-side'), hd = doc.querySelector('.header');
+        if (!hd) return;
+        const stops = stopsOf(p, c);
+        if (!stops.length) return;
+        const rail = doc.createElement('div');
+        rail.className = 'kp-rail';
+        rail.setAttribute('role', 'navigation');
+        rail.setAttribute('aria-label', p.cs ? 'Case study sections' : 'Page sections');
+        const track = doc.createElement('div'), fill = doc.createElement('div'), ring = doc.createElement('div');
+        track.className = 'kp-rail-track';
+        fill.className = 'kp-rail-fill';
+        ring.className = 'kp-rr';
+        rail.append(track, fill);
+        const marks = stops.map(s => {
+            const b = doc.createElement('button');
+            b.type = 'button';
+            b.className = s.photo ? 'kp-ra' : 'kp-ri';
+            b.setAttribute('aria-label', 'Go to ' + (s.aria || s.label));
+            if (s.photo) {
+                const img = doc.createElement('img');
+                img.src = small(s.photo);
+                img.alt = '';
+                img.decoding = 'async';
+                b.appendChild(img);
+            } else b.innerHTML = icon(s.key);
+            tip(b, s.label);
+            b.addEventListener('click', () => go(s));
+            rail.appendChild(b);
+            return b;
+        });
+        rail.appendChild(ring);
+        const bar = doc.createElement('div'), inner = doc.createElement('div'), line = doc.createElement('div');
+        bar.className = 'kp-bar';
+        inner.className = 'kp-bar-in';
+        line.className = 'line';
+        inner.appendChild(line);
+        bar.appendChild(inner);
+        doc.body.appendChild(bar);
+        if (side) prog.classList.add('kp-has-rail');
+        const sync = () => bar.classList.toggle('on', hd.classList.contains('nah-hide'));
+        const mo = new MutationObserver(sync);
+        mo.observe(hd, {attributes: true, attributeFilter: ['class']});
+        sync();
+        // where the nav never slides away (NavAutoHide waits for the page curtain, which the /ai-design-system landing page
+        // doesn't have), the bar follows the scroll itself, with the nav's distances: in after 150px down, out after 120px up
+        let dir = null;
+        if (!doc.querySelector('.trans')) {
+            let a = scrollY, on = false;
+            dir = () => {
+                const y = scrollY;
+                if (y < 80) { on = false; a = y; }
+                else if (on) { if (y > a) a = y; else if (a - y > 120) { on = false; a = y; } }
+                else if (y < a) a = y;
+                else if (y - a > 150) { on = true; a = y; }
+                bar.classList.toggle('on', on);
+            };
+        }
+        R = {rail, track, fill, ring, marks, stops, prog, side, bar, inner, mo, at: [], pos: [], f: -1, cur: -1, hz: false};
+        home();
+        R.raf = 0;
+        R.onScroll = () => {
+            if (dir) dir();
+            if (!R.raf) R.raf = requestAnimationFrame(() => { R.raf = 0; tick(); });
+        };
+        R.onResize = () => { home(); };
+        addEventListener('scroll', R.onScroll, {passive: true});
+        addEventListener('resize', R.onResize);
+        if (window.ResizeObserver) {
+            let q = 0;
+            R.ro = new ResizeObserver(() => { if (!q) q = requestAnimationFrame(() => { q = 0; place(); }); });
+            R.ro.observe(doc.body);
+        }
+    }
+    function destroy() {
+        if (tipEl) tipEl.classList.remove('on');
+        if (!R) return;
+        removeEventListener('scroll', R.onScroll);
+        removeEventListener('resize', R.onResize);
+        if (R.ro) R.ro.disconnect();
+        R.mo.disconnect();
+        R.rail.remove();
+        R.bar.remove();
+        if (R.side) {
+            R.prog.classList.remove('kp-has-rail');
+            ['--kp-t', '--kp-x', '--kp-H'].forEach(v => R.prog.style.removeProperty(v));
+        }
+        R = null;
+        aim++;
+    }
+    // vertical in the side column, horizontal in the bar below 992px
+    function home() {
+        if (!R) return;
+        R.hz = innerWidth < NARROW || !R.side;
+        const to = R.hz ? R.inner : R.prog;
+        if (R.rail.parentElement !== to) to.appendChild(R.rail);
+        if (!R.hz) {
+            const H = Math.min(Math.max(340, 22 + (R.stops.length - 1) * STEP), Math.floor(innerHeight * .6));
+            R.prog.style.setProperty('--kp-H', H + 'px');
+            R.prog.style.setProperty('--kp-t', Math.round((R.side.clientHeight - H) / 2) + 'px');
+            R.prog.style.setProperty('--kp-x', Math.floor(R.side.clientWidth / 2) + 'px');
+        }
+        place();
+    }
+    // stops sit evenly on whole pixels (so nothing moves as the page loads more), and each lights up when its part reaches
+    // mid-screen; parts too close to the end of the page to get there share out the last stretch of scrolling
+    // a part's top in the page, from the layout (reveal animations move sections about while they come in)
+    function topOf(e) {
+        let t = 0;
+        for (; e; e = e.offsetParent) t += e.offsetTop;
+        return t;
+    }
+    // stops sit evenly on whole pixels (so nothing moves as the page loads more), and each lights up when its part reaches
+    // mid-screen; parts too close to the end of the page to get there share out the last stretch of scrolling
+    function place() {
+        if (!R) return;
+        const b = R.rail.getBoundingClientRect(), hz = R.hz, L = Math.round(hz ? b.width : b.height);
+        if (!L) return;
+        let on = R.stops.map((s, i) => i);
+        const spread = k => Math.floor((L - 22) / Math.max(1, k - 1));
+        if (spread(on.length) < MIN) on = on.filter(i => !R.stops[i].extra);
+        const step = spread(on.length), n = on.length, max = Math.max(0, root.scrollHeight - innerHeight - 2), gap = innerHeight * .2;
+        R.marks.forEach((m, i) => m.classList.toggle('kp-off', on.indexOf(i) < 0));
+        R.on = on.map(i => R.marks[i]);
+        R.pos = on.map((x, i) => 11 + i * step);
+        const raw = on.map(i => {
+            const s = R.stops[i], h = s.el.offsetHeight;
+            return Math.max(0, topOf(s.el) - innerHeight / 2 + (s.mid ? Math.min(h, innerHeight) / 2 - innerHeight * .1 : 0));
+        });
+        let lim = max;
+        R.at = raw.slice();
+        for (let i = n - 1; i >= 0; i--) {
+            if (raw[i] <= lim) break;
+            R.at[i] = Math.max(0, lim);
+            lim -= gap;
+        }
+        R.pos.forEach((p, i) => { R.on[i].style.translate = hz ? p + 'px 0' : '0 ' + p + 'px'; });
+        let g = '';
+        for (let i = 0; i < n - 1; i++) {
+            const a = R.pos[i] + EDGE, z = R.pos[i + 1] - EDGE;
+            if (z > a) g += ',transparent ' + a + 'px,var(--kp-c) ' + a + 'px ' + z + 'px,transparent ' + z + 'px';
+        }
+        const bg = g ? 'linear-gradient(' + (hz ? 'to right' : 'to bottom') + ',transparent 0' + g + ')' : 'none';
+        [R.track, R.fill].forEach(l => {
+            l.style.backgroundImage = bg;
+            l.style.height = hz ? '' : R.pos[n - 1] + 'px';
+            l.style.width = hz ? R.pos[n - 1] + 'px' : '';
+        });
+        R.f = -1;
+        R.cur = -1;
+        tick();
+    }
+    function tick() {
+        if (!R || !R.at || !R.at.length) return;
+        const at = R.at, pos = R.pos, n = at.length;
+        // at the very end of the page the last stop is reached, whatever loaded in since the stops were placed
+        let y = scrollY, k = 0, f;
+        if (y >= root.scrollHeight - innerHeight - 2) y = Math.max(y, at[n - 1]);
+        while (k < n - 1 && y >= at[k + 1]) k++;
+        if (y < at[0]) f = pos[0];
+        else if (k < n - 1) f = pos[k] + (y - at[k]) / Math.max(1, at[k + 1] - at[k]) * (pos[k + 1] - pos[k]);
+        else f = pos[k];
+        f = Math.round(f * 10) / 10;
+        const cur = y >= at[0] ? k : 0;
+        if (cur !== R.cur) {
+            R.cur = cur;
+            R.marks.forEach(m => m.removeAttribute('aria-current'));
+            R.on[cur].setAttribute('aria-current', 'step');
+        }
+        if (f === R.f) return;
+        R.f = f;
+        R.ring.style.translate = R.hz ? f + 'px 0' : '0 ' + f + 'px';
+        R.rail.style.setProperty('--kp-y', f + 'px');
+        R.rail.style.setProperty('--kp-h', f + 'px');
+        // the ring travels the line between stops and turns into the icon (or the photo) it reaches
+        let near = false;
+        R.on.forEach((m, i) => {
+            const here = Math.abs(pos[i] - f) < NEAR;
+            near = near || here;
+            m.classList.toggle('here', here);
+        });
+        R.ring.classList.toggle('gone', near);
+        R.rail.style.setProperty('--kp-gap', near ? '0px' : '9px');
+    }
+
+    // this page, before the site script builds its scroll animations (so stacking the headlines needs no re-measure)
+    let page = pageOf(doc.querySelector('[data-barba="container"]'));
+    const container = () => doc.querySelector('[data-barba="container"]');
+    mark(page);
+    header(page, container());
+    if (page.ns === 'projDtl') stack(container());
+    let w = innerWidth;
+    addEventListener('resize', () => {
+        if (innerWidth === w) return;
+        const was = w >= NARROW;
+        w = innerWidth;
+        if (page.ns === 'projDtl' && was !== (w >= NARROW) && stack(container()) && window.ScrollTrigger) ScrollTrigger.refresh();
+    });
+    // each build checks it's still for the page on screen (a quick second page change can overtake it); Barba also runs
+    // beforeEnter for the first page, so page changes are counted in before()
+    let gen = 0;
+    const start = () => { const c = container(); later(() => { if (!gen && c.isConnected) build(page, c); }); };
+    if (doc.readyState === 'complete') start(); else addEventListener('load', () => setTimeout(start, 50), {once: true});
+    // page changes: the rail fades as the page leaves and is rebuilt for the next one once it's in
+    if (window.barba && barba.hooks) {
+        barba.hooks.before(() => { root.classList.add('kp-rail-leaving'); aim++; gen++; });
+        barba.hooks.beforeEnter(d => {
+            const c = d.next.container;
+            page = pageOf(c, d.next.url && d.next.url.path);
+            mark(page);
+            header(page, c);
+            if (page.ns === 'projDtl') stack(c);
+        });
+        barba.hooks.after(d => {
+            destroy();
+            root.classList.remove('kp-rail-leaving');
+            const c = d.next.container, g = gen;
+            later(() => { if (g === gen && c.isConnected) build(page, c); });
+        });
+    }
 })();
 // About awards table: each row also holds copies that are hidden on desktop (the mobile award name, a CMS-hidden cell, the
 // mobile-only links). GSAP can't read a hidden element's transform, so when the reveal starts it would show each hidden letter,
@@ -193,6 +807,8 @@ const mainScript = () => {
         duration: 1.6,
         smoothWheel: window.kpOpts.smoothScroll
     })
+    // kpRail's jumps scroll with the same Lenis
+    window.kpLenis = lenis
     // Drive Lenis from GSAP's ticker and update ScrollTrigger on every Lenis scroll, so scrolling and
     // scroll-driven animations land on the same frame (Lenis's documented GSAP setup).
     function raf(time) {
