@@ -1,6 +1,7 @@
 // Two switches, read from the konpo-min <script> tag in the site footer (a URL parameter of the same name wins, for testing):
 //   data-smooth-scroll="off" (default) native scrolling; "on" brings back Lenis's smoothed wheel scrolling
-//   data-headlines="gradient" (default) scroll headlines fade grey to dark line by line; "reveal" brings back the letter/word reveals
+//   data-headlines="gradient" (default) scroll headlines fade grey to dark line by line; "reveal" brings back the letter/word reveals;
+//   "cases" uses the gradient on case studies only and keeps the reveals elsewhere, with Home's scroll headlines going word by word
 // e.g. https://www.konpo.studio/about?smooth-scroll=on&headlines=reveal shows the old behaviour without republishing.
 (function kpOptions() {
     function opt(name, fallback) {
@@ -42,14 +43,17 @@ function kpNativeVelocity(lenis) {
 // so kpAwardsSkipHidden and kpWrapSplit wrap it.
 (function kpHeadlineGradient() {
     const Original = window.SplitText, ST = window.ScrollTrigger;
-    if (window.kpOpts.headlines !== 'gradient' || !Original || !ST || Original.__kpGrad) return;
-    const GRADIENT = '.home-abt-title,.home-ser-title,.home-proj-title,.home-proj-sub,.abt-val-title,.abt-team-sub-title,' +
+    const mode = window.kpOpts.headlines;
+    if ((mode !== 'gradient' && mode !== 'cases') || !Original || !ST || Original.__kpGrad) return;
+    // "cases": only the case-study headlines (their letter reveals were the slow part of opening a case study)
+    const pick = s => mode === 'cases' ? s.split(',').filter(x => x.startsWith('.projdtl-')).join(',') : s;
+    const GRADIENT = pick('.home-abt-title,.home-ser-title,.home-proj-title,.home-proj-sub,.abt-val-title,.abt-team-sub-title,' +
         '.abt-award-title,.abt-testi-title,.projdtl-intro-main-txt,.projdtl-brand-title,.projdtl-testi-main-txt,' +
-        '.ser-abt-title,.ser-prog-title,.ser-quote-title';
-    const STILL = '.home-abt-label,.home-abt-sub-wrap-p,.abt-statis-item-title,.abt-statis-item-sub,.abt-val-label,' +
+        '.ser-abt-title,.ser-prog-title,.ser-quote-title');
+    const STILL = pick('.home-abt-label,.home-abt-sub-wrap-p,.abt-statis-item-title,.abt-statis-item-sub,.abt-val-label,' +
         '.abt-award .abt-award-sub-item-txt,.abt-testi-label,.abt-testi-main-name,.abt-testi-main-sub,.abt-testi-main-text,' +
         '.projdtl-intro-label,.projdtl-brand-rictxt p,.projdtl-testi-client-name,.projdtl-testi-client-job,' +
-        '.ser-abt-sub,.ser-prog-sub,.ser-why-item-label,.ser-why-item-title,.ser-why-item-sub';
+        '.ser-abt-sub,.ser-prog-sub,.ser-why-item-label,.ser-why-item-title,.ser-why-item-sub');
     const MEDIA = 'img,svg,video,iframe,picture,.w-embed';
     const style = document.createElement('style');
     style.textContent = '.kp-gl{width:fit-content;max-width:100%;' +
@@ -2940,7 +2944,9 @@ const mainScript = () => {
                 homeHeroClient()
             }
             function homeAbt() {
-                const homeAbtSub = new SplitText('.home-abt-title', typeOpts.chars);
+                // data-headlines="cases": word by word instead of letter by letter (opacity rather than autoAlpha keeps the words readable)
+                const kpW = window.kpOpts.headlines === 'cases';
+                const homeAbtSub = new SplitText('.home-abt-title', kpW ? typeOpts.words : typeOpts.chars);
                 if ($(window).width() >= 768) {
                     let tlLabel = gsap.timeline({
                         scrollTrigger: {
@@ -2950,7 +2956,7 @@ const mainScript = () => {
                         }
                     })
                     tlLabel
-                    .from(homeAbtSub.words, {yPercent: 60, autoAlpha: 0, duration: .5, stagger: .03})
+                    .from(homeAbtSub.words, kpW ? {yPercent: 60, opacity: 0, duration: .5, stagger: .03} : {yPercent: 60, autoAlpha: 0, duration: .5, stagger: .03})
                 }
                 let tlLabelScrub = gsap.timeline({
                     scrollTrigger: {
@@ -2961,7 +2967,7 @@ const mainScript = () => {
                     }
                 })
                 tlLabelScrub
-                .from(homeAbtSub.chars, {color: '#C1C1C1', duration: .1, stagger: 0.02, ease: 'power1.out'})
+                .from(kpW ? homeAbtSub.words : homeAbtSub.chars, {color: '#C1C1C1', duration: .1, stagger: kpW ? .05 : 0.02, ease: 'power1.out'})
 
                 if ($(window).width() >= 768){
                     const allLinksLine = $('.home-abt-sub-wrap-p .hover-un')
@@ -3067,7 +3073,8 @@ const mainScript = () => {
                                 })
                             })
                             if ($(window).width() >= 768) {
-                                const homeSerTitle = new SplitText('.home-ser-title', typeOpts.chars)
+                                const kpW = window.kpOpts.headlines === 'cases'
+                                const homeSerTitle = new SplitText('.home-ser-title', kpW ? typeOpts.words : typeOpts.chars)
                                 let tl = gsap.timeline({
                                     scrollTrigger: {
                                         trigger: '.home-ser .title-wrap',
@@ -3078,7 +3085,7 @@ const mainScript = () => {
                                         }
                                     }
                                 })
-                                tl.from(homeSerTitle.chars, {yPercent: 60, autoAlpha: 0, duration: .4, stagger: .02})
+                                tl.from(kpW ? homeSerTitle.words : homeSerTitle.chars, kpW ? {yPercent: 60, opacity: 0, duration: .5, stagger: .1} : {yPercent: 60, autoAlpha: 0, duration: .4, stagger: .02})
                             }
                         })
                     }
@@ -3113,7 +3120,8 @@ const mainScript = () => {
                 //     $(el).find('.proj-gall-item-inner').attr('href', projLink)
                 // })
                 if ($(window).width() >= 768) {
-                    const homeProjTitle = new SplitText($(data.next.container).find('.home-proj-title'), typeOpts.chars)
+                    const kpW = window.kpOpts.headlines === 'cases'
+                    const homeProjTitle = new SplitText($(data.next.container).find('.home-proj-title'), kpW ? typeOpts.words : typeOpts.chars)
                     let tl = gsap.timeline({
                         scrollTrigger: {
                             trigger: $(data.next.container).find('.home-proj .title-wrap'),
@@ -3124,7 +3132,7 @@ const mainScript = () => {
                             }
                         }
                     })
-                    tl.from(homeProjTitle.chars, {yPercent: 60, autoAlpha: 0, duration: .4, stagger: .02})
+                    tl.from(kpW ? homeProjTitle.words : homeProjTitle.chars, kpW ? {yPercent: 60, opacity: 0, duration: .5, stagger: .1} : {yPercent: 60, autoAlpha: 0, duration: .4, stagger: .02})
                     const homeProjSub = new SplitText($(data.next.container).find('.home-proj-sub'), typeOpts.words);
                     let tlSub = gsap.timeline({
                         scrollTrigger: {
