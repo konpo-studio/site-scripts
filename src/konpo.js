@@ -2042,48 +2042,48 @@ const mainScript = () => {
             this.hideGr = this.thickness / 2 - 5;
             this.pillSvg = [
                 {
-                    name: 'wireframe',
-                    shape: 'https://uploads-ssl.webflow.com/65544f28fc8e963bc080b6f4/657d6ca642a3aaa0355be68b_wireframe.svg',
+                    name: 'survives',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.10.0/assets/pills/survives-the-build.svg',
                 },
                 {
                     name: 'moodboard',
                     shape: 'https://uploads-ssl.webflow.com/65544f28fc8e963bc080b6f4/657d6ca6eac136d96d139c3f_MoodB.svg',
                 },
                 {
-                    name: 'uxui',
-                    shape: 'https://uploads-ssl.webflow.com/65544f28fc8e963bc080b6f4/657d6ca654838aafd21fe7e7_uxui.svg',
+                    name: 'norawhex',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.10.0/assets/pills/no-raw-hex.svg',
                 },
                 {
-                    name: 'interaction',
-                    shape: 'https://uploads-ssl.webflow.com/65544f28fc8e963bc080b6f4/657d6ca63e44cc3168e0f1af_interaction.svg',
+                    name: 'slopfilter',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.10.0/assets/pills/slop-filter.svg',
                 },
                 {
-                    name: 'remote',
-                    shape: 'https://uploads-ssl.webflow.com/65544f28fc8e963bc080b6f4/657d6ca6fb8709505411c3db_remote.svg',
+                    name: 'claudemd',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.10.0/assets/pills/claude-md.svg',
                 },
                 {
                     name: 'designsystem',
-                    shape: 'https://uploads-ssl.webflow.com/65544f28fc8e963bc080b6f4/657d6ca6e7ea1b094647d724_designsystem.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.10.0/assets/pills/design-system.svg',
                 },
                 {
-                    name: 'webflow',
-                    shape: 'https://uploads-ssl.webflow.com/65544f28fc8e963bc080b6f4/657d83a7fe6a1b80f0f40e18_Webflow.svg',
+                    name: 'variantfilled',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.10.0/assets/pills/variant-filled.svg',
                 },
                 {
-                    name: 'component',
-                    shape: 'https://uploads-ssl.webflow.com/65544f28fc8e963bc080b6f4/657d6ca662d48bffd4a136d4_component.svg',
+                    name: 'semantictokens',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.10.0/assets/pills/semantic-tokens.svg',
                 },
                 {
-                    name: 'landingpagedesign',
-                    shape: 'https://uploads-ssl.webflow.com/65544f28fc8e963bc080b6f4/657d6ca6b8e1715fecbc041f_LandPDesign.svg',
+                    name: 'tokensallthewaydown',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.10.0/assets/pills/tokens-all-the-way-down.svg',
                 },
                 {
-                    name: 'minimalist',
-                    shape: 'https://uploads-ssl.webflow.com/65544f28fc8e963bc080b6f4/657d6ca65bf5a83f4faafae2_minimalist.svg',
+                    name: 'hugfillfixed',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.10.0/assets/pills/hug-fill-fixed.svg',
                 },
                 {
-                    name: 'interface',
-                    shape: 'https://uploads-ssl.webflow.com/65544f28fc8e963bc080b6f4/657d6ca5ffd0b1429fcf6637_interface.svg',
+                    name: 'onejsonpertheme',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.10.0/assets/pills/one-json-per-theme.svg',
                 },
                 {
                     name: 'aboutus',
@@ -2098,8 +2098,8 @@ const mainScript = () => {
                     shape: 'https://uploads-ssl.webflow.com/65544f28fc8e963bc080b6f4/657fc05b465ed5c6e7e2fc27_figma.svg',
                 },
                 {
-                    name: 'imgthumb',
-                    shape: 'https://uploads-ssl.webflow.com/65544f28fc8e963bc080b6f4/657d83b6a0fbf5e81c832a91_imgthumb.svg',
+                    name: 'code',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.10.0/assets/pills/code.svg',
                 },
             ]
         }
