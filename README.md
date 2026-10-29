@@ -29,6 +29,7 @@ Rolling back is the same in reverse: point the tag back at the previous version 
 
 ## Releases
 
+- **v1.9.2**: the Home hero's dots, after Jean's first look on staging. The load reveal is now a soft pulse of resting-size dots at the resting grid's own strength, running out from the headline at 600px/s (no growing ring), and it leaves the same near-the-pointer grid behind. At the top the dots run up to just under the nav line: canvas edges keep their own thin margin (0.3rem clear, then 1rem to full size) instead of the headline's 1.4rem + 2.4rem, so the first row sits about 4px below the line, not 23px. The headline margin, the rest rules and the title grids are unchanged. Roll back to v1.9.1.
 - **v1.9.1**: the Home hero's intro wave runs out from the headline alone. In v1.9.0 the sub copy sent out its own ring at the same moment, so two waves ran at once. Nothing else changes (the clear margin round the sub copy and the calm-on-the-words rule still cover both). Roll back to v1.9.0.
 - **v1.9.0**: dots in the Home hero, on staging only until the switch says otherwise.
   - The same dots as the title grids (size, bulge, 120 Hz trail, lens push, click pulse and ripple) across the hero, from under the nav fill down behind the client cards. They replace the cards' old static dot pattern, so the gaps between the cards are part of the same grid.

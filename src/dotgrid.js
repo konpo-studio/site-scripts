@@ -5,12 +5,13 @@
 // Options (all off by default = today's look): trail timing, dome shape, lens push, grow in/out, touch, reduced motion,
 // and a click: the bulge squeezes while the button is down, springs back on release, and a ripple runs out through the grid.
 // Link text (case-study next-project hero): moving onto the title text of a live link sends a ripple too.
-// Protected text (Home hero, 1.9.0): `protect` lists what the dots must keep clear of. The headline's letters (and boxes or
-// canvas edges) go into a quarter-size mask, and a distance field built from it gives every dot its distance to the nearest
-// letter. Inside the clear margin there is never a dot; the bulge, ripple and trace shrink to fit outside it. The rest of
-// the hero rules: the resting grid only near the pointer, the bulge fading on the words and easing down when the pointer
-// rests, dots on the margin's edge swelling and sliding away as the bulge comes close, and an intro wave that runs out from
-// the words once (from the entries marked wave if any; held until intro() is called). Without `protect` none of this runs and the title grids draw as before.
+// Protected text (Home hero, 1.9.0): `protect` lists what the dots must keep clear of. The headline's letters (and boxes)
+// go into a quarter-size mask, and a distance field built from it gives every dot its distance to the nearest letter; canvas
+// edges keep their own, thinner margin (1.9.2). Inside the clear margin there is never a dot; the bulge, ripple and trace
+// shrink to fit outside it. The rest of the hero rules: the resting grid only near the pointer, the bulge fading on the words
+// and easing down when the pointer rests, dots on the margin's edge swelling and sliding away as the bulge comes close, and
+// an intro that runs out from the words once as a soft pulse of resting-size dots (from the entries marked wave if any; held
+// until intro() is called). Without `protect` none of this runs and the title grids draw as before.
 (function () {
     const parseRem = (v) => v / 10 * parseFloat(getComputedStyle(document.documentElement).fontSize);
     const TAU = Math.PI * 2;
@@ -45,6 +46,9 @@
     // Click ripple: two rings (the second at half strength, 0.11s behind) travelling out at 700px/s, 24px wide,
     // fading with a 0.65s time constant. On the ring a dot grows by up to 60% of the centre dot's radius.
     const RIP = { speed: 700, width: 24, life: .65, gap: .11, end: 2.6, lift: .6, shove: 6 };
+    // Protected text's intro: a pulse the shape of the margin running out at 600px/s, 70px wide, that lights resting-size
+    // dots at the resting grid's own strength (no growth) and leaves the 'near' grid behind it.
+    const INTRO = { speed: .6, width: 70 };
     const PURPLE = [150, 128, 255];
     // The pointer, shared by every grid (same start as konpo-min's: the middle of the screen until the first move).
     const P = window.kpPointer || (window.kpPointer = { x: innerWidth / 2, y: innerHeight / 2, touch: false });
@@ -71,8 +75,8 @@
         const api = { paused: false, stats, set, ripple: (x, y, s) => { if (!reduced() && visible) { ripple({ clientX: x, clientY: y }, s); wake() } }, getMouse: () => mouse, setMouse: (m) => { mouse = m && { x: m.x, y: m.y }; wake() }, invalidate: () => { full = true; wake() },
             resize: () => resize(),
             // lay the grid down: re-measure the words where they ended up, then one wave runs out from them
-            intro: () => { if (!o.protect) return; held = false; resize(); if (!H) return; introAt = performance.now(); introDur = (H.maxU + 200) / .9; full = true; wake() },
-            clearance: (x, y) => H ? smooth(o.halo * rem, (o.halo + o.fade) * rem, dist(x, y)) : 1 };
+            intro: () => { if (!o.protect) return; held = false; resize(); if (!H) return; introAt = performance.now(); introDur = (H.maxU + 200) / INTRO.speed; full = true; wake() },
+            clearance: (x, y) => H ? clear(x, y)[0] : 1 };
 
         function set(next) {
             Object.assign(o, next); if (o.enter !== 'grow' && !touchDev) amp = 1;
@@ -97,9 +101,9 @@
             full = true; wake();
         }
 
-        // The protected field: letters (each character drawn where the page drew it), padded boxes and canvas edges into a
-        // quarter-size mask, its distance field, then per dot: clearance (0 in the margin, 1 clear of it), distance to the
-        // ink, and the way out (for the push away from the words).
+        // The protected field: letters (each character drawn where the page drew it) and padded boxes into a quarter-size
+        // mask, its distance field, then per dot: clearance (0 in the margin, 1 clear of it), room before the margin (canvas
+        // edges included), and the way out (for the push away from the words).
         function mask() {
             rem = parseRem(10);
             const gw = Math.ceil(cw / MS), gh = Math.ceil(ch / MS);
@@ -117,7 +121,7 @@
             const g = layer(), w = layer(), waves = o.protect.some((q) => q.wave), v = waves && layer();
             const cr = canvas.getBoundingClientRect(), rg = document.createRange(), desc = {};
             for (const q of o.protect) {
-                if (q.edge) { g.fillRect(0, q.edge === 'top' ? -MS : ch - MS, cw, MS * 2); continue }
+                if (q.edge) continue; // canvas edges: clear() below
                 const el = typeof q.el === 'string' ? document.querySelector(q.el) : q.el;
                 if (!el || !el.getClientRects().length) continue;
                 if (q.as === 'box') {
@@ -149,19 +153,31 @@
             }
             const field = toField(g), words = toField(w), wave = v ? toField(v) : words;
             H = { field, words, gw, gh };
-            const N = (rw + 1) * (rh + 1), halo = o.halo * rem, fade = o.fade * rem;
+            const N = (rw + 1) * (rh + 1), halo = o.halo * rem;
             const C = new Float32Array(N), D = new Float32Array(N), WD = new Float32Array(N), S = new Float32Array(N), GX = new Float32Array(N), GY = new Float32Array(N);
             const from = o.restFrom && o.restFrom.getBoundingClientRect().top - cr.top;
             let maxU = 0;
             for (let j = 0; j <= rh; j++) for (let i = 0; i <= rw; i++) {
-                const k = j * (rw + 1) + i, x = sx * i + ox, y = sy * j + oy, d = dist(x, y);
-                D[k] = d; C[k] = smooth(halo, halo + fade, d); WD[k] = dist(x, y, wave);
+                const k = j * (rw + 1) + i, x = sx * i + ox, y = sy * j + oy, [c, room] = clear(x, y);
+                D[k] = room; C[k] = c; WD[k] = dist(x, y, wave);
                 if (C[k] > 0 && WD[k] - halo > maxU) maxU = WD[k] - halo;
                 if (from != null) S[k] = smooth(from - step * 2.5, from + 2, y); // fades in over the two rows above
-                const gx = dist(x + MS, y) - dist(x - MS, y), gy = dist(x, y + MS) - dist(x, y - MS), gl = Math.hypot(gx, gy) || 1;
+                const gx = clear(x + MS, y)[1] - clear(x - MS, y)[1], gy = clear(x, y + MS)[1] - clear(x, y - MS)[1], gl = Math.hypot(gx, gy) || 1;
                 GX[k] = gx / gl; GY[k] = gy / gl;
             }
             Object.assign(H, { C, D, GX, GY, WD, S, maxU: Math.min(maxU, 4000) });
+        }
+        // [clearance, room] at a point: room is how far a dot's edge may reach before the margin. Letters and boxes take the
+        // halo and fade; a canvas edge its own (rem, default .3 and 1), so the dots can run up close to the nav line.
+        function clear(x, y) {
+            const halo = o.halo * rem, d = dist(x, y);
+            let c = smooth(halo, halo + o.fade * rem, d), room = d - halo;
+            for (const q of o.protect) {
+                if (!q.edge) continue;
+                const e = q.edge === 'top' ? y : ch - y, eh = (q.halo != null ? q.halo : .3) * rem, ef = (q.fade != null ? q.fade : 1) * rem;
+                c = Math.min(c, smooth(eh, eh + ef, e)); room = Math.min(room, e - eh);
+            }
+            return [c, room];
         }
         // distance (px) from a point to the nearest protected ink (or, given the words field, the nearest letter), bilinear between mask cells
         function dist(x, y, field = H.field) {
@@ -229,20 +245,20 @@
             let n = 0;
             // protected text: dots near the patch edge can be pushed into it, so look a little wider; resting dots fade with
             // distance from the pointer ('near'), so they're drawn in alpha buckets instead of one batch
-            const halo = H ? o.halo * rem : 0, spot = o.spot * rem, front = introAt ? (now - introAt) * .9 : 0, buckets = H && new Map();
+            const halo = H ? o.halo * rem : 0, spot = o.spot * rem, front = introAt ? (now - introAt) * INTRO.speed : 0, buckets = H && new Map();
             if (H) { const e = Math.ceil(step / sx); i0 = Math.max(0, i0 - e); i1 = Math.min(rw, i1 + e); j0 = Math.max(0, j0 - e); j1 = Math.min(rh, j1 + e) }
             ctx.beginPath();
             for (let j = j0; j <= j1; j++) {
                 const y = sy * j + oy;
                 for (let i = i0; i <= i1; i++) {
                     const x = sx * i + ox, dx = x - m.x, dy = y - m.y, d = Math.sqrt(dx * dx + dy * dy);
-                    let c = 1, rv = 1, intro = 0, q0 = 0;
+                    let c = 1, rv = 1, q0 = 0;
                     if (H) {
                         q0 = j * (rw + 1) + i; c = H.C[q0];
                         if (c <= 0) continue; // inside the clear margin: never a dot
                         if (near) rv = Math.max(1 - smooth(spot * .45, spot, d), H.S[q0]);
-                        // intro: a wave the shape of the margin runs outward once and lays the resting grid down behind it
-                        if (introAt) { const u = H.WD[q0] - halo; rv *= smooth(front, front - 140, u); intro = Math.exp(-(((u - front + 40) / 46) ** 2)) }
+                        // intro: a soft pulse the shape of the margin runs outward once and lays the resting grid down behind it
+                        if (introAt) { const u = H.WD[q0] - halo; rv = Math.max(rv * smooth(front, front - INTRO.width * 2, u), Math.exp(-(((u - front + INTRO.width * .6) / INTRO.width) ** 2))) }
                     }
                     const s = shape(d) * amp; // how far into the bulge this dot sits (0 = resting grid, 1 = centre)
                     let r = size * 4.8 * s * pulse * c; // (c = 1 on the title grids)
@@ -265,12 +281,11 @@
                     if (a < .56) a = .56;
                     n++;
                     if (H) {
-                        // the intro wave's crest, then the margin's edge swelling as the bulge comes near (it traces the words)
-                        r += top * .45 * intro * c;
+                        // the margin's edge swelling as the bulge comes near (it traces the words)
                         const nb = amp * Math.max(0, 1 - d / (REACH * 1.6));
                         if (o.wrap && nb > 0 && c < 1) r += size * 2.2 * o.wrap * 4 * c * (1 - c) * nb;
                         // a dot's edge never reaches into the margin, however big the bulge, ripple or trace makes it
-                        const room = H.D[q0] - halo;
+                        const room = H.D[q0];
                         if (r > room) r = room;
                         if (r < 1) r = 1;
                         a = (r + 1) / 8; if (a < .56) a = .56; if (a > 1) a = 1;
@@ -476,7 +491,8 @@
     // tight margin, resting grid near the pointer (and always in the cards' gaps, as before), bulge fades on the words and
     // relaxes when still, dots trace the words and slide away from them, click pulse + ripple. Desktop pointers only, like the title
     // grids (no touch, wider than 991px). The grid stays blank until the headline's own reveal (konpo-min's kpHero timeline)
-    // has finished, then one wave runs out from the words.
+    // has finished, then one soft pulse of resting-size dots runs out from the words (Jean, 1.9.2: "way more subtle"), and the
+    // dots run up to just under the nav line.
     window.kpHeroDotsSite = function (root) {
         const hero = (root && root.querySelector ? root : document).querySelector('.home-hero');
         const title = hero && hero.querySelector('.home-hero-title');
@@ -503,7 +519,7 @@
             rgb: { x: '46', y: '46', z: '46' },
             // the sub copy by its letters (a padded box would cut into the rows above the cards), its globe as a box; the wave
             // runs out from the headline only
-            protect: [{ el: title, wave: true }, { el: hero.querySelector('.home-hero-sub') }, { el: hero.querySelector('.home-hero-sub-wrap .ic-embed'), as: 'box', pad: .4 }, { edge: 'top' }],
+            protect: [{ el: title, wave: true }, { el: hero.querySelector('.home-hero-sub') }, { el: hero.querySelector('.home-hero-sub-wrap .ic-embed'), as: 'box', pad: .4 }, { edge: 'top' }], // the top edge is the nav line
             halo: 1.4, fade: 2.4, rest: 'near', spot: 26, restFrom: cards, calm: true, relax: true, wrap: .5, repel: 1, hold: true
         }, SITE));
         // wait for the headline: konpo-min builds kpHero once the loader lets it (up to ~20s on a slow load)
