@@ -2043,7 +2043,7 @@ const mainScript = () => {
             this.pillSvg = [
                 {
                     name: 'survives',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/survives-the-build.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/survives-the-build.svg',
                 },
                 {
                     name: 'moodboard',
@@ -2051,39 +2051,39 @@ const mainScript = () => {
                 },
                 {
                     name: 'norawhex',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/no-raw-hex.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/no-raw-hex.svg',
                 },
                 {
                     name: 'slopfilter',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/slop-filter.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/slop-filter.svg',
                 },
                 {
                     name: 'claudemd',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/claude-md.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/claude-md.svg',
                 },
                 {
                     name: 'designsystem',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/design-system.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/design-system.svg',
                 },
                 {
                     name: 'variantfilled',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/variant-filled.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/variant-filled.svg',
                 },
                 {
                     name: 'semantictokens',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/semantic-tokens.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/semantic-tokens.svg',
                 },
                 {
                     name: 'tokensallthewaydown',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/tokens-all-the-way-down.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/tokens-all-the-way-down.svg',
                 },
                 {
                     name: 'hugfillfixed',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/hug-fill-fixed.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/hug-fill-fixed.svg',
                 },
                 {
                     name: 'onejsonpertheme',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/one-json-per-theme.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/one-json-per-theme.svg',
                 },
                 {
                     name: 'aboutus',
@@ -2099,43 +2099,47 @@ const mainScript = () => {
                 },
                 {
                     name: 'code',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/code.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/code.svg',
                 },
                 {
                     name: 'toolclaude',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/icon-claude.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/icon-claude.svg',
                 },
                 {
                     name: 'toolastro',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/icon-astro.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/icon-astro.svg',
                 },
                 {
                     name: 'toolwebflow',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/icon-webflow.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/icon-webflow.svg',
                 },
                 {
                     name: 'toolstorybook',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/icon-storybook.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/icon-storybook.svg',
                 },
                 {
                     name: 'toolgithub',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/icon-github.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/icon-github.svg',
                 },
                 {
                     name: 'toolnextdotjs',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/icon-nextdotjs.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/icon-nextdotjs.svg',
                 },
                 {
                     name: 'toolreact',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/icon-react.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/icon-react.svg',
                 },
                 {
                     name: 'toolangular',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/icon-angular.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/icon-angular.svg',
                 },
                 {
                     name: 'toollottiefiles',
-                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.11.0/assets/pills/icon-lottiefiles.svg',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/icon-lottiefiles.svg',
+                },
+                {
+                    name: 'noslop',
+                    shape: 'https://cdn.jsdelivr.net/gh/konpo-studio/site-scripts@1.12.0/assets/pills/no-slop-pls-thx.svg',
                 },
             ]
         }
@@ -2309,6 +2313,7 @@ const mainScript = () => {
             this.toolreact = this.pillShape(this.pillSvg[21]);
             this.toolangular = this.pillShape(this.pillSvg[22]);
             this.toollottiefiles = this.pillShape(this.pillSvg[23]);
+            this.noslop = this.pillShape(this.pillSvg[24]);
         }
         initMouseMove() {
             let mouse = this.Mouse.create(this.render.canvas);
