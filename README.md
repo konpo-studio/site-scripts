@@ -29,6 +29,11 @@ Rolling back is the same in reverse: point the tag back at the previous version 
 
 ## Releases
 
+- **v1.14.0**: thirteen more marks in the About hero circles, and fewer plain circles.
+  - Awards Konpo holds (Awwwards, FWA, Red Dot, Webby, CSSDA, Clutch, Product Hunt) and more of the stack (Tailwind, shadcn/ui, TypeScript, GSAP, Material Design, Swift), as `assets/pills/icon-*.svg`, same white circle and hairline as the tool marks from 1.11.0.
+  - Desktop gets all 13, tablets the 7 awards, phones the first 4 (Awwwards, FWA, Red Dot, Webby). The plain circles go from 21/14/5 to 8/7/2 (desktop/tablet/phone), so the hero stops looking like empty bubbles.
+  - FWA, Red Dot and Webby are cut from the site's own award badge files and Clutch from its logo, all in the site ink; the rest are Simple Icons in their brand colour, except GSAP and shadcn/ui in ink (GSAP's green would bring green back into the hero).
+  - The pill and icon assets from 1.10.0 to 1.12.0 are referenced on this tag too.
 - **v1.13.0**: the dot icons morph on scroll, on staging only until the switch says otherwise.
   - About's Guiding Pillars and the feature icons on the four service pages. Today the icons crossfade. Now the dots of one icon turn into the next as you scroll through the list.
   - The panel's background dots are drawn on a canvas, at the same spots the CSS dot tile puts them, in the tile's own colour and size. Every icon dot sits on one of those grid points.
