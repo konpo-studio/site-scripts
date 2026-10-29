@@ -5366,6 +5366,8 @@ const mainScript = () => {
                     }
                 })
             }
+            // 1.15.0: features whose icon is a dot SVG get a plain image in place of the Lottie player (src/dotmorph.js)
+            window.kpDotIcons && kpDotIcons(data.next.container)
             serFeaLottie(data)
             function serFea(data) {
                 let allItems = $(data.next.container).find('.ser-fea-item-label');

@@ -470,7 +470,24 @@
         about: { sec: '.abt-val', panel: '.abt-val-imgs-stick', icons: '.abt-val-imgs-wrap > .abt-val-imgs-item:not(.abt-val-imgs-item-mobile)',
             items: '.abt-val-item', line: .35, from: -1, src: (el) => { const i = el.querySelector('img'); return i && i.getAttribute('src') } },
         services: { sec: '.ser-fea', panel: '.ser-fea-imgs-wrap', icons: '.ser-fea-imgs-wrap > .ser-fea-imgs-item.force-1-1',
-            items: '.ser-fea-main-item', line: .5, from: 0, src: (el) => { const p = el.querySelector('dotlottie-player'); return p && p.getAttribute('data-srcUrl') } },
+            items: '.ser-fea-main-item', line: .5, from: 0, src: (el) => {
+                const p = el.querySelector('dotlottie-player'), i = el.querySelector('img.kp-dot-ic');
+                return p ? p.getAttribute('data-srcUrl') : i && i.getAttribute('src');
+            } },
+    };
+    // 1.15.0: a service feature's "Lottie Animation URL" can point at a dot SVG instead (the 2026-10-29 icon set). Its
+    // dotlottie-player becomes a plain image, so phones, the crossfade and konpo.studio (morph off) show the drawing as is.
+    // konpo-min calls this on the services view before the Lotties and the morph look at the section.
+    const isSvg = (u) => /\.svg($|[?#])/i.test(u || '');
+    window.kpDotIcons = function (root) {
+        (root && root.querySelectorAll ? root : document).querySelectorAll('.ser-fea dotlottie-player[data-srcUrl]').forEach((pl) => {
+            const u = pl.getAttribute('data-srcUrl');
+            if (!isSvg(u)) return;
+            const img = document.createElement('img');
+            img.src = u; img.alt = ''; img.decoding = 'async'; img.className = 'kp-dot-ic';
+            img.style.cssText = 'display:block;width:100%;height:100%';
+            pl.replaceWith(img);
+        });
     };
     const SITE = { order: 'scatter', path: 'arc', reach: 3, dip: 0, breathe: false, reduce: 'auto' };
     function parts(root, kind) {
@@ -510,11 +527,14 @@
         const io = new IntersectionObserver((es) => {
             if (!es.some((e) => e.isIntersecting)) return;
             io.disconnect();
-            Promise.all([Promise.all(p.srcs.map((u) => fetch(u).then((r) => { if (!r.ok) throw new Error(r.status); return about ? r.text().then(fromSvg) : r.json().then(fromLottie) }))), readTile(p.panel)])
+            Promise.all([Promise.all(p.srcs.map((u) => fetch(u).then((r) => { if (!r.ok) throw new Error(r.status); return about || isSvg(u) ? r.text().then(fromSvg) : r.json().then(fromLottie) }))), readTile(p.panel)])
                 .then(([shapes, tile]) => {
                     if (!canvas.isConnected || !tile) throw new Error('gone');
-                    const engine = kpDotMorph(canvas, shapes, Object.assign({ tile, box, from: p.k.from, intro: !about, ready: () => p.sec.classList.add('kp-morph-on') }, SITE));
-                    kpDotMorph.scroll(engine, p.items, { line: p.k.line, zone: .8, from: p.k.from, settle: false, canvas });
+                    // a Lottie first replays its own fade-in; with an SVG first (no loop) the first icon rises out of the
+                    // grid as its item arrives, the same as About
+                    const from = about || !shapes[0].loop ? -1 : 0;
+                    const engine = kpDotMorph(canvas, shapes, Object.assign({ tile, box, from, intro: from === 0, ready: () => p.sec.classList.add('kp-morph-on') }, SITE));
+                    kpDotMorph.scroll(engine, p.items, { line: p.k.line, zone: .8, from, settle: false, canvas });
                 })
                 .catch(() => fallback(p, canvas));
         }, { rootMargin: '150% 0px' });
