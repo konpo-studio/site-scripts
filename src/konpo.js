@@ -2352,8 +2352,8 @@ const mainScript = () => {
         $('.gal-popup').removeClass('active')
     })
     $(window).on('keyup', function(e) {
-        e.preventDefault();
         if (e.keyCode === 27) {
+            e.preventDefault();
             $('.gal-popup').removeClass('active')
         }
     })
