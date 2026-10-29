@@ -6,6 +6,8 @@
 //   "old" the original grid. Without the attribute: new on staging (*.webflow.io), old on konpo.studio.
 //   data-herodots="on" the Home hero's dots round the headline (kpHeroDotsSite in src/dotgrid.js); "off" none.
 //   Without the attribute: on on staging (*.webflow.io), off on konpo.studio.
+//   data-dotmorph="on" the About pillar icons and service-page feature icons morph into each other on the panel's dot grid
+//   as you scroll (src/dotmorph.js); "off" today's crossfade. Without the attribute: on on staging, off on konpo.studio.
 // e.g. https://www.konpo.studio/about?smooth-scroll=on&headlines=reveal shows the old behaviour without republishing.
 (function kpOptions() {
     function opt(name, fallback) {
@@ -18,7 +20,8 @@
     }
     window.kpOpts = {smoothScroll: opt('smooth-scroll', 'off') === 'on', headlines: opt('headlines', 'gradient'),
         dotgrid: opt('dotgrid', /\.webflow\.io$/.test(location.hostname) ? 'new' : 'old'),
-        herodots: opt('herodots', /\.webflow\.io$/.test(location.hostname) ? 'on' : 'off')};
+        herodots: opt('herodots', /\.webflow\.io$/.test(location.hostname) ? 'on' : 'off'),
+        dotmorph: opt('dotmorph', /\.webflow\.io$/.test(location.hostname) ? 'on' : 'off')};
     if (!window.kpOpts.smoothScroll) {
         const style = document.createElement('style');
         // Lenis's own CSS only sets this in smooth mode; popups still shouldn't hand their scroll on to the page
@@ -4159,6 +4162,8 @@ const mainScript = () => {
                     .from(titleTxt.words, {yPercent: 60, autoAlpha:0, stagger: .01, duration: .4, ease: gOpts.ease}, '<=.2')
                 }
 
+                // 1.13.0: the icons morph on the dot grid instead (src/dotmorph.js) when the dotmorph switch is on
+                if (window.kpDotMorphSite && kpDotMorphSite(data.next.container, 'about')) return
                 const items = $(data.next.container).find('.abt-val .abt-val-item');
                 $(data.next.container).find('.abt-val-imgs-stick .abt-val-imgs-wrap').eq(0).addClass('active')
                 items.each((idx, el) => {
@@ -5256,6 +5261,8 @@ const mainScript = () => {
                     start: 'top bottom',
                     once: true,
                     onEnter: () => {
+                        // 1.13.0: the dot morph draws the sticky icons, so their Lotties never load (phones keep theirs)
+                        if ($(window).width() > 767 && window.kpDotMorphSite && kpDotMorphSite.wants(data.next.container, 'services')) return
                         let allLotties
                         if ($(window).width() > 767) {
                             allLotties = $(data.next.container).find('.ser-fea-imgs-item.force-1-1').find('dotlottie-player');
@@ -5308,6 +5315,7 @@ const mainScript = () => {
                 })
                 $(data.next.container).find('.ser-fea-imgs-item').eq(0).addClass('active')
                 if ($(window).width() > 767) {
+                    if (window.kpDotMorphSite && kpDotMorphSite(data.next.container, 'services')) return
                     // let tl = gsap.timeline({
                     //     scrollTrigger: {
                     //         trigger: $(data.next.container).find('.ser-fea-main'),
