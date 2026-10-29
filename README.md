@@ -29,6 +29,7 @@ Rolling back is the same in reverse: point the tag back at the previous version 
 
 ## Releases
 
+- **v1.14.2**: the big Konpo pill is out of the About hero. Its sprite entry stays in the list so the other pills keep their indices; the "No slop pls thx" pill, the tool, award and stack marks and the plain circles are as in 1.14.1. Every pill and icon URL points at this tag.
 - **v1.14.1**: fixes 1.14.0, whose sprite URLs pointed at the 1.13.0 tag (where the thirteen new icon files don't exist, so they 404'd and the circles came up plain). Every pill and icon URL now points at this tag. Same code otherwise.
 - **v1.14.0**: thirteen more marks in the About hero circles, and fewer plain circles.
   - Awards Konpo holds (Awwwards, FWA, Red Dot, Webby, CSSDA, Clutch, Product Hunt) and more of the stack (Tailwind, shadcn/ui, TypeScript, GSAP, Material Design, Swift), as `assets/pills/icon-*.svg`, same white circle and hairline as the tool marks from 1.11.0.
