@@ -4,6 +4,8 @@
 //   "cases" uses the gradient on case studies only and keeps the reveals elsewhere, with Home's scroll headlines going word by word
 //   data-dotgrid="new" the title dot grids from src/dotgrid.js (sharp on retina, asleep at rest, click and link-text ripples);
 //   "old" the original grid. Without the attribute: new on staging (*.webflow.io), old on konpo.studio.
+//   data-herodots="on" the Home hero's dots round the headline (kpHeroDotsSite in src/dotgrid.js); "off" none.
+//   Without the attribute: on on staging (*.webflow.io), off on konpo.studio.
 // e.g. https://www.konpo.studio/about?smooth-scroll=on&headlines=reveal shows the old behaviour without republishing.
 (function kpOptions() {
     function opt(name, fallback) {
@@ -15,7 +17,8 @@
         return (tag && tag.getAttribute('data-' + name)) || fallback;
     }
     window.kpOpts = {smoothScroll: opt('smooth-scroll', 'off') === 'on', headlines: opt('headlines', 'gradient'),
-        dotgrid: opt('dotgrid', /\.webflow\.io$/.test(location.hostname) ? 'new' : 'old')};
+        dotgrid: opt('dotgrid', /\.webflow\.io$/.test(location.hostname) ? 'new' : 'old'),
+        herodots: opt('herodots', /\.webflow\.io$/.test(location.hostname) ? 'on' : 'off')};
     if (!window.kpOpts.smoothScroll) {
         const style = document.createElement('style');
         // Lenis's own CSS only sets this in smooth mode; popups still shouldn't hand their scroll on to the page
@@ -3381,6 +3384,8 @@ const mainScript = () => {
                 requestAnimationFrame(checkToStart)
             }
             homeHero()
+            // 1.9.0: the hero's dots (src/dotgrid.js), laid down once the headline has finished its reveal
+            if (window.kpHeroDotsSite) kpHeroDotsSite(data.next && data.next.container)
 
             function homeHeroVid() {
                 if($(window).width() >= 768) {

@@ -5,9 +5,41 @@
 // Options (all off by default = today's look): trail timing, dome shape, lens push, grow in/out, touch, reduced motion,
 // and a click: the bulge squeezes while the button is down, springs back on release, and a ripple runs out through the grid.
 // Link text (case-study next-project hero): moving onto the title text of a live link sends a ripple too.
+// Protected text (Home hero, 1.9.0): `protect` lists what the dots must keep clear of. The headline's letters (and boxes or
+// canvas edges) go into a quarter-size mask, and a distance field built from it gives every dot its distance to the nearest
+// letter. Inside the clear margin there is never a dot; the bulge, ripple and trace shrink to fit outside it. The rest of
+// the hero rules: the resting grid only near the pointer, the bulge fading on the words and easing down when the pointer
+// rests, dots on the margin's edge swelling and sliding away as the bulge comes close, and an intro wave that runs out from
+// the words once (held until intro() is called). Without `protect` none of this runs and the title grids draw as before.
 (function () {
     const parseRem = (v) => v / 10 * parseFloat(getComputedStyle(document.documentElement).fontSize);
     const TAU = Math.PI * 2;
+    const MS = 4; // protect mask cell, px
+    const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t) };
+    // Exact squared Euclidean distance transform (Felzenszwalb & Huttenlocher), one column then one row at a time.
+    function edt1d(f, n, d, v, z) {
+        let k = 0; v[0] = 0; z[0] = -1e20; z[1] = 1e20;
+        for (let q = 1; q < n; q++) {
+            let s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+            while (s <= z[k]) { k--; s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]) }
+            k++; v[k] = q; z[k] = s; z[k + 1] = 1e20;
+        }
+        k = 0;
+        for (let q = 0; q < n; q++) { while (z[k + 1] < q) k++; d[q] = (q - v[k]) * (q - v[k]) + f[v[k]] }
+    }
+    function edt(g, w, h) {
+        const n = Math.max(w, h), f = new Float64Array(n), d = new Float64Array(n), v = new Int32Array(n), z = new Float64Array(n + 1);
+        for (let x = 0; x < w; x++) {
+            for (let y = 0; y < h; y++) f[y] = g[y * w + x];
+            edt1d(f, h, d, v, z);
+            for (let y = 0; y < h; y++) g[y * w + x] = d[y];
+        }
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) f[x] = g[y * w + x];
+            edt1d(f, w, d, v, z);
+            for (let x = 0; x < w; x++) g[y * w + x] = Math.sqrt(d[x]) * MS;
+        }
+    }
     const REACH = 24 * 4.8; // px from the bulge centre where today's dot radius reaches 0
     const reduceMq = matchMedia('(prefers-reduced-motion: reduce)');
     // Click ripple: two rings (the second at half strength, 0.11s behind) travelling out at 700px/s, 24px wide,
@@ -16,11 +48,14 @@
     const PURPLE = [150, 128, 255];
     // The pointer, shared by every grid (same start as konpo-min's: the middle of the screen until the first move).
     const P = window.kpPointer || (window.kpPointer = { x: innerWidth / 2, y: innerHeight / 2, touch: false });
-    addEventListener('pointermove', (e) => { P.x = e.clientX; P.y = e.clientY; P.touch = e.pointerType === 'touch' }, { passive: true, capture: true });
+    addEventListener('pointermove', (e) => { P.x = e.clientX; P.y = e.clientY; P.touch = e.pointerType === 'touch'; P.moved = true }, { passive: true, capture: true });
 
     window.kpDotGrid = function (canvas, opt = {}) {
         const ctx = canvas.getContext('2d');
-        const o = Object.assign({ rgb: { x: '46', y: '46', z: '46' }, trail: 'frame', shape: 'cone', lens: 0, enter: 'follow', touch: false, reduce: false, click: 'off', tint: false, textRipple: 'off', text: null, hover: null }, opt);
+        const o = Object.assign({ rgb: { x: '46', y: '46', z: '46' }, trail: 'frame', shape: 'cone', lens: 0, enter: 'follow', touch: false, reduce: false, click: 'off', tint: false, textRipple: 'off', text: null, hover: null,
+            // protected text (all rem): margin with no dots, band where they grow back; resting grid 'all' or 'near' (within spot),
+            // and with 'near' always on from restFrom's top edge down (the Home cards' gaps, where the old static pattern was)
+            protect: null, halo: 1.4, fade: 2.4, rest: 'all', spot: 26, restFrom: null, calm: false, relax: false, wrap: 0, repel: 0, hold: false }, opt);
         const stats = opt.stats; // the prototype's cost panel passes an object; on the site nothing is counted
         const size = parseRem(2), step = parseRem(20), pad = parseRem(1), top = size * 4.8;
         let cw, ch, kx, ky, rw, rh, sx, sy, ox, oy;
@@ -30,8 +65,14 @@
         let visible = false, raf = 0, last = 0, touching = false;
         // click state: live ripples, the bulge's spring (1 = at rest), the patch the ripples covered last frame
         let ripples = [], pulse = 1, pulseV = 0, pressed = false, ripBox = null, lastType = 'mouse';
+        // protected text: the field (H, built on resize once not held), when the pointer last moved, the intro wave
+        let H = null, rem = 0, held = !!(o.protect && o.hold), lastMove = 0, relaxTimer = 0, introAt = 0, introDur = 0;
         const reduced = () => o.reduce && (o.reduce === 'force' || reduceMq.matches);
-        const api = { paused: false, stats, set, ripple: (x, y, s) => { if (!reduced() && visible) { ripple({ clientX: x, clientY: y }, s); wake() } }, getMouse: () => mouse, setMouse: (m) => { mouse = m && { x: m.x, y: m.y }; wake() }, invalidate: () => { full = true; wake() } };
+        const api = { paused: false, stats, set, ripple: (x, y, s) => { if (!reduced() && visible) { ripple({ clientX: x, clientY: y }, s); wake() } }, getMouse: () => mouse, setMouse: (m) => { mouse = m && { x: m.x, y: m.y }; wake() }, invalidate: () => { full = true; wake() },
+            resize: () => resize(),
+            // lay the grid down: re-measure the words where they ended up, then one wave runs out from them
+            intro: () => { if (!o.protect) return; held = false; resize(); if (!H) return; introAt = performance.now(); introDur = (H.maxU + 200) / .9; full = true; wake() },
+            clearance: (x, y) => H ? smooth(o.halo * rem, (o.halo + o.fade) * rem, dist(x, y)) : 1 };
 
         function set(next) {
             Object.assign(o, next); if (o.enter !== 'grow' && !touchDev) amp = 1;
@@ -52,7 +93,81 @@
             sx = (cw - size) / (rw + pad); sy = (ch - size) / (rh + pad);
             ox = (cw / rw) * (pad / 2); oy = (ch / rh) * (pad / 2);
             if (stats) stats.backing = canvas.width + '×' + canvas.height;
+            if (o.protect && !held) mask();
             full = true; wake();
+        }
+
+        // The protected field: letters (each character drawn where the page drew it), padded boxes and canvas edges into a
+        // quarter-size mask, its distance field, then per dot: clearance (0 in the margin, 1 clear of it), distance to the
+        // ink, and the way out (for the push away from the words).
+        function mask() {
+            rem = parseRem(10);
+            const gw = Math.ceil(cw / MS), gh = Math.ceil(ch / MS);
+            const mc = document.createElement('canvas'); mc.width = gw; mc.height = gh;
+            const g = mc.getContext('2d', { willReadFrequently: true });
+            g.setTransform(1 / MS, 0, 0, 1 / MS, 0, 0); g.fillStyle = '#000';
+            // the intro wave runs out from the words alone, so they also go into a second mask (w) without the boxes and edges
+            const wc = document.createElement('canvas'); wc.width = gw; wc.height = gh;
+            const w = wc.getContext('2d', { willReadFrequently: true });
+            w.setTransform(1 / MS, 0, 0, 1 / MS, 0, 0);
+            const cr = canvas.getBoundingClientRect(), rg = document.createRange(), desc = {};
+            for (const q of o.protect) {
+                if (q.edge) { g.fillRect(0, q.edge === 'top' ? -MS : ch - MS, cw, MS * 2); continue }
+                const el = typeof q.el === 'string' ? document.querySelector(q.el) : q.el;
+                if (!el || !el.getClientRects().length) continue;
+                if (q.as === 'box') {
+                    const b = el.getBoundingClientRect(), pad = (q.pad || 0) * rem;
+                    g.beginPath(); g.roundRect ? g.roundRect(b.left - cr.left - pad, b.top - cr.top - pad, b.width + pad * 2, b.height + pad * 2, pad + 4) : g.rect(b.left - cr.left - pad, b.top - cr.top - pad, b.width + pad * 2, b.height + pad * 2); g.fill();
+                    continue;
+                }
+                const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+                for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+                    if (n.parentElement.closest('.kp-sr')) continue; // the screen-reader copy of split words
+                    const cs = getComputedStyle(n.parentElement), font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+                    g.font = w.font = font;
+                    if (!(font in desc)) desc[font] = g.measureText('Hg').fontBoundingBoxDescent || parseFloat(cs.fontSize) * .22;
+                    const t = n.data;
+                    for (let i = 0; i < t.length; i++) {
+                        if (t[i] === ' ' || t[i] === '\n' || t[i] === ' ') continue;
+                        rg.setStart(n, i); rg.setEnd(n, i + 1);
+                        const b = rg.getClientRects()[0];
+                        if (!b || b.width < 1) continue;
+                        g.fillText(t[i], b.left - cr.left, b.bottom - desc[font] - cr.top); w.fillText(t[i], b.left - cr.left, b.bottom - desc[font] - cr.top);
+                    }
+                    // a struck word (.txt-disable draws its line as a pseudo-element): the line counts as ink too
+                    if (n.parentElement.closest('.txt-disable') || /line-through/.test(cs.textDecorationLine)) {
+                        rg.selectNodeContents(n);
+                        for (const b of rg.getClientRects()) g.fillRect(b.left - cr.left - 2, b.top - cr.top + b.height * .45, b.width + 4, b.height * .15);
+                    }
+                }
+            }
+            const px = g.getImageData(0, 0, gw, gh).data, field = new Float64Array(gw * gh);
+            for (let i = 0; i < gw * gh; i++) field[i] = px[i * 4 + 3] > 60 ? 0 : 1e20;
+            edt(field, gw, gh);
+            const wx = w.getImageData(0, 0, gw, gh).data, words = new Float64Array(gw * gh);
+            for (let i = 0; i < gw * gh; i++) words[i] = wx[i * 4 + 3] > 60 ? 0 : 1e20;
+            edt(words, gw, gh);
+            H = { field, words, gw, gh };
+            const N = (rw + 1) * (rh + 1), halo = o.halo * rem, fade = o.fade * rem;
+            const C = new Float32Array(N), D = new Float32Array(N), WD = new Float32Array(N), S = new Float32Array(N), GX = new Float32Array(N), GY = new Float32Array(N);
+            const from = o.restFrom && o.restFrom.getBoundingClientRect().top - cr.top;
+            let maxU = 0;
+            for (let j = 0; j <= rh; j++) for (let i = 0; i <= rw; i++) {
+                const k = j * (rw + 1) + i, x = sx * i + ox, y = sy * j + oy, d = dist(x, y);
+                D[k] = d; C[k] = smooth(halo, halo + fade, d); WD[k] = dist(x, y, words);
+                if (C[k] > 0 && WD[k] - halo > maxU) maxU = WD[k] - halo;
+                if (from != null) S[k] = smooth(from - step * 2.5, from + 2, y); // fades in over the two rows above
+                const gx = dist(x + MS, y) - dist(x - MS, y), gy = dist(x, y + MS) - dist(x, y - MS), gl = Math.hypot(gx, gy) || 1;
+                GX[k] = gx / gl; GY[k] = gy / gl;
+            }
+            Object.assign(H, { C, D, GX, GY, WD, S, maxU: Math.min(maxU, 4000) });
+        }
+        // distance (px) from a point to the nearest protected ink (or, given the words field, the nearest letter), bilinear between mask cells
+        function dist(x, y, field = H.field) {
+            const { gw, gh } = H;
+            const fx = Math.min(gw - 1.001, Math.max(0, x / MS - .5)), fy = Math.min(gh - 1.001, Math.max(0, y / MS - .5));
+            const i = fx | 0, j = fy | 0, u = fx - i, v = fy - j, a = field[j * gw + i], b = field[j * gw + i + 1], c = field[(j + 1) * gw + i], d = field[(j + 1) * gw + i + 1];
+            return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
         }
 
         // 0..1 bulge strength at distance d: today's straight cone, or a rounded dome (calmaria's sphere curve)
@@ -82,10 +197,13 @@
         }
 
         function draw(now) {
-            const t0 = stats && performance.now(), m = mouse, reach = REACH * (1 + o.lens) + top * Math.max(1, pulse) + 2;
+            const t0 = stats && performance.now(), m = mouse, near = H && o.rest === 'near';
+            let reach = REACH * (1 + o.lens) + top * Math.max(1, pulse) + 2;
+            // protected text: the trace and the push reach a little further out, and the resting grid shows round the pointer
+            if (H) reach = Math.max(reach, REACH * 1.6 + top + step, near ? o.spot * rem + step : 0);
             const rg = rings(now), box = ringBox(rg), wave = o.click === 'wave';
             let x0 = 0, y0 = 0, x1 = cw, y1 = ch;
-            if (!full && drawnAt) {
+            if (!full && drawnAt && !introAt) {
                 x0 = Math.min(m.x, drawnAt.x) - reach; x1 = Math.max(m.x, drawnAt.x) + reach;
                 y0 = Math.min(m.y, drawnAt.y) - reach; y1 = Math.max(m.y, drawnAt.y) + reach;
                 // plus wherever the ripples are now, and were last frame (so a finished ring gets wiped)
@@ -104,17 +222,29 @@
             ctx.setTransform(kx, 0, 0, ky, 0, 0);
             ctx.fillStyle = `rgb(${o.rgb.x}, ${o.rgb.y}, ${o.rgb.z})`;
             const ux0 = px0 / kx - 2, ux1 = px1 / kx + 2, uy0 = py0 / ky - 2, uy1 = py1 / ky + 2;
-            const i0 = Math.max(0, Math.ceil((ux0 - ox) / sx)), i1 = Math.min(rw, Math.floor((ux1 - ox) / sx));
-            const j0 = Math.max(0, Math.ceil((uy0 - oy) / sy)), j1 = Math.min(rh, Math.floor((uy1 - oy) / sy));
+            let i0 = Math.max(0, Math.ceil((ux0 - ox) / sx)), i1 = Math.min(rw, Math.floor((ux1 - ox) / sx));
+            let j0 = Math.max(0, Math.ceil((uy0 - oy) / sy)), j1 = Math.min(rh, Math.floor((uy1 - oy) / sy));
             const big = [];
             let n = 0;
+            // protected text: dots near the patch edge can be pushed into it, so look a little wider; resting dots fade with
+            // distance from the pointer ('near'), so they're drawn in alpha buckets instead of one batch
+            const halo = H ? o.halo * rem : 0, spot = o.spot * rem, front = introAt ? (now - introAt) * .9 : 0, buckets = H && new Map();
+            if (H) { const e = Math.ceil(step / sx); i0 = Math.max(0, i0 - e); i1 = Math.min(rw, i1 + e); j0 = Math.max(0, j0 - e); j1 = Math.min(rh, j1 + e) }
             ctx.beginPath();
             for (let j = j0; j <= j1; j++) {
                 const y = sy * j + oy;
                 for (let i = i0; i <= i1; i++) {
                     const x = sx * i + ox, dx = x - m.x, dy = y - m.y, d = Math.sqrt(dx * dx + dy * dy);
+                    let c = 1, rv = 1, intro = 0, q0 = 0;
+                    if (H) {
+                        q0 = j * (rw + 1) + i; c = H.C[q0];
+                        if (c <= 0) continue; // inside the clear margin: never a dot
+                        if (near) rv = Math.max(1 - smooth(spot * .45, spot, d), H.S[q0]);
+                        // intro: a wave the shape of the margin runs outward once and lays the resting grid down behind it
+                        if (introAt) { const u = H.WD[q0] - halo; rv *= smooth(front, front - 140, u); intro = Math.exp(-(((u - front + 40) / 46) ** 2)) }
+                    }
                     const s = shape(d) * amp; // how far into the bulge this dot sits (0 = resting grid, 1 = centre)
-                    let r = size * 4.8 * s * pulse;
+                    let r = size * 4.8 * s * pulse * c; // (c = 1 on the title grids)
                     if (r < 1) r = 1;
                     // ripple: how much ring sits on this dot (0 = none), and the outward shove for the wave version
                     let lift = 0, wx = 0, wy = 0;
@@ -129,10 +259,34 @@
                     if (s > 0 && lift) { const c = s >= .5 ? 0 : 1 - s * s * (12 - 16 * s); lift *= c; wx *= c; wy *= c }
                     if (lift < .01) lift = wx = wy = 0; // the ring's far tails: leave those dots in the batched fill
                     if (lift > 1.5) lift = 1.5;
-                    r += top * RIP.lift * lift;
+                    r += top * RIP.lift * lift * c;
                     let a = (r + 1) / 8;
                     if (a < .56) a = .56;
                     n++;
+                    if (H) {
+                        // the intro wave's crest, then the margin's edge swelling as the bulge comes near (it traces the words)
+                        r += top * .45 * intro * c;
+                        const nb = amp * Math.max(0, 1 - d / (REACH * 1.6));
+                        if (o.wrap && nb > 0 && c < 1) r += size * 2.2 * o.wrap * 4 * c * (1 - c) * nb;
+                        // a dot's edge never reaches into the margin, however big the bulge, ripple or trace makes it
+                        const room = H.D[q0] - halo;
+                        if (r > room) r = room;
+                        if (r < 1) r = 1;
+                        a = (r + 1) / 8; if (a < .56) a = .56; if (a > 1) a = 1;
+                        // resting dots take the 'near' visibility and fade in across the margin's edge; grown dots go to full colour
+                        a = (.56 * rv + (a - .56 * rv) * smooth(1, 2.6, r)) * (c < .55 ? c / .55 : 1);
+                        if (r <= 1.01) {
+                            if (a < .02) continue;
+                            const key = Math.round(a * 20); let p = buckets.get(key);
+                            if (!p) buckets.set(key, p = []);
+                            p.push(x, y); continue;
+                        }
+                        // the lens push fades toward the words (no shove into the margin), plus the slide away from them
+                        const push = o.lens && d < REACH ? 1 + o.lens * Math.sqrt(1 - (d / REACH) ** 2) * amp * c : 1;
+                        const away = o.repel ? o.repel * step * .7 * (1 - c) * nb : 0;
+                        big.push(m.x + dx * push + wx + H.GX[q0] * away, m.y + dy * push + wy + H.GY[q0] * away, r, a, 0);
+                        continue;
+                    }
                     if (r === 1 && a === .56) { ctx.moveTo(x + 1, y); ctx.arc(x, y, 1, 0, TAU); continue }
                     // calmaria's lens: dots inside the bulge are pushed outward along a hemisphere
                     const push = o.lens && d < REACH ? 1 + o.lens * Math.sqrt(1 - (d / REACH) ** 2) * amp : 1;
@@ -140,6 +294,11 @@
                 }
             }
             ctx.globalAlpha = .56; ctx.fill(); // every resting dot in the patch in one fill
+            if (buckets) for (const [key, p] of buckets) {
+                ctx.globalAlpha = key / 20; ctx.beginPath();
+                for (let q = 0; q < p.length; q += 2) { ctx.moveTo(p[q] + 1, p[q + 1]); ctx.arc(p[q], p[q + 1], 1, 0, TAU) }
+                ctx.fill();
+            }
             const base = [+o.rgb.x, +o.rgb.y, +o.rgb.z];
             for (let b = 0; b < big.length; b += 5) {
                 ctx.globalAlpha = big[b + 3];
@@ -160,11 +319,14 @@
             raf = 0;
             if (wasConnected && !canvas.isConnected) return stop();
             if (!visible || api.paused || !cw) return;
+            if (held) { last = 0; return } // protected text, held: blank until intro()
             const t0 = stats && performance.now();
             if (stats) stats.frames = (stats.frames || 0) + 1;
             const r = canvas.getBoundingClientRect(), p = window.kpPointer;
-            const tx = p.x - r.left, ty = p.y - r.top;
-            if (!mouse) mouse = { x: tx, y: ty }; // first frame after scrolling back in: start under the pointer
+            let tx = p.x - r.left, ty = p.y - r.top;
+            // protected text: no pointer until it has really moved (kpPointer starts mid-screen, right over the headline)
+            if (H && !p.moved) tx = ty = -1e4;
+            if (!mouse || (H && mouse.x === -1e4 && tx !== -1e4)) mouse = { x: tx, y: ty }; // first frame after scrolling back in: start under the pointer
             // today: 6% of the way per frame, so the trail is twice as quick at 120 fps as at 60 fps
             const dt = last ? Math.min(100, now - last) : 16.7;
             last = now;
@@ -174,8 +336,15 @@
             let goal = 1;
             if (touchDev) goal = o.touch && touching ? 1 : 0; // resting grid on touch screens, a bulge under the finger with Touch on
             else if (o.enter === 'grow') { const h = (o.hover || canvas.parentElement).getBoundingClientRect(); goal = p.x >= h.left && p.x <= h.right && p.y >= h.top && p.y <= h.bottom ? 1 : 0 }
+            // protected text: the bulge fades while the pointer is on the words, and eases down (slowly) once it rests
+            const still = H && o.relax && now - lastMove > 1400;
+            if (H && goal) {
+                if (o.calm) goal *= .12 + .88 * smooth(0, (o.halo + o.fade) * rem * 1.4, dist(tx, ty, H.words));
+                if (still) goal *= .38;
+            }
             const ampWas = amp;
-            amp += (goal - amp) * k; if (Math.abs(goal - amp) < .002) amp = goal;
+            amp += (goal - amp) * (still && amp > goal ? 1 - Math.pow(.988, dt / 8.333) : k); if (Math.abs(goal - amp) < .002) amp = goal;
+            if (introAt && now - introAt > introDur) { introAt = 0; full = true } // the wave is out: one clean redraw
             // the bulge's spring: eases down to 78% while the button is down (critically damped, no wobble), and on release
             // a kick pops it past 1 once (about 10%) before it settles (the swing back is 0.4%, too small to see)
             const pulseWas = pulse;
@@ -187,10 +356,10 @@
             }
             ripples = ripples.filter((rp) => now - rp.t0 < RIP.end * 1000);
             const moved = !drawnAt || Math.abs(mouse.x - drawnAt.x) >= .05 || Math.abs(mouse.y - drawnAt.y) >= .05;
-            if (full || moved || amp !== ampWas || pulse !== pulseWas || ripples.length || ripBox) draw(now);
+            if (full || moved || amp !== ampWas || pulse !== pulseWas || ripples.length || ripBox || introAt) draw(now);
             if (stats) stats.loopMs = (stats.loopMs || 0) + performance.now() - t0;
             // keep going until the bulge has caught up with the pointer and the click has played out, then sleep
-            if (Math.abs(tx - mouse.x) >= .05 || Math.abs(ty - mouse.y) >= .05 || amp !== goal || pressed || pulse !== 1 || ripples.length || ripBox) schedule();
+            if (Math.abs(tx - mouse.x) >= .05 || Math.abs(ty - mouse.y) >= .05 || amp !== goal || pressed || pulse !== 1 || ripples.length || ripBox || introAt) schedule();
             else last = 0;
         }
         function schedule() { if (!raf) raf = requestAnimationFrame(frame) }
@@ -201,6 +370,9 @@
         window.addEventListener('pointermove', wake, { passive: true });
         window.addEventListener('scroll', wake, { passive: true });
         window.addEventListener('resize', resize);
+        // protected text: note when the pointer (or the page under it) last moved, and wake once it has rested long enough to relax
+        const stir = () => { lastMove = performance.now(); if (o.relax) { clearTimeout(relaxTimer); relaxTimer = setTimeout(wake, 1450) } };
+        if (o.protect) { window.addEventListener('pointermove', stir, { passive: true }); window.addEventListener('scroll', stir, { passive: true }) }
         // Touch (off today): the bulge follows the finger while it's down, then shrinks away.
         // touchmove keeps firing while the page scrolls, where pointer events stop at pointercancel.
         const t = (on) => (e) => {
@@ -275,6 +447,7 @@
             ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach((n, i) => window.removeEventListener(n, i < 2 ? tOn : tOff));
             window.removeEventListener('pointerdown', down); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up); window.removeEventListener('click', tap);
             window.removeEventListener('pointermove', hoverText); clearInterval(textTimer);
+            window.removeEventListener('pointermove', stir); window.removeEventListener('scroll', stir); clearTimeout(relaxTimer);
         }
         resize();
         return api;
@@ -283,14 +456,62 @@
     // On the site (konpo-min 1.8.0): initTitleGrid offers each title canvas here first. With the dotgrid switch on "new"
     // (kpOptions: the data-dotgrid attribute or ?dotgrid=, else new on *.webflow.io and old on konpo.studio) this grid takes
     // it, with the settings Jean picked in the prototype on 2026-10-29; otherwise the old grid runs as before.
+    const SITE = { trail: '120', shape: 'cone', lens: .2, enter: 'grow', click: 'ripple' };
     window.kpDotGridSite = function (canvas, rgb) {
         if (!canvas || !canvas.getContext || !window.kpOpts || window.kpOpts.dotgrid !== 'new') return false;
         const link = canvas.closest('a[href]');
-        window.kpDotGrid(canvas, {
-            rgb, trail: '120', shape: 'cone', lens: .2, enter: 'grow', click: 'ripple', textRipple: 'enter',
+        window.kpDotGrid(canvas, Object.assign({
+            rgb, textRipple: 'enter',
             text: link && link.querySelector('.projdtl-hero-title'),
             hover: canvas.closest('[data-move="wrap"], .projdtl-hero-title-wrap')
-        });
+        }, SITE));
         return true;
+    };
+
+    // Home hero (konpo-min 1.9.0, the herodots switch: data-herodots on the konpo-min tag or ?herodots=on|off, else on on
+    // *.webflow.io and off on konpo.studio). The title grids' dots (SITE above) across the hero, from under the nav fill down
+    // behind the client cards (it replaces their old static dot pattern, so the cards' gaps are part of the same grid), keeping
+    // clear of the headline's letters and the globe + sub copy, with the hero rules Jean picked in the prototype on 2026-10-29:
+    // tight margin, resting grid near the pointer (and always in the cards' gaps, as before), bulge fades on the words and
+    // relaxes when still, dots trace the words and slide away from them, click pulse + ripple. Desktop pointers only, like the title
+    // grids (no touch, wider than 991px). The grid stays blank until the headline's own reveal (konpo-min's kpHero timeline)
+    // has finished, then one wave runs out from the words.
+    window.kpHeroDotsSite = function (root) {
+        const hero = (root && root.querySelector ? root : document).querySelector('.home-hero');
+        const title = hero && hero.querySelector('.home-hero-title');
+        if (!title || !window.kpOpts || window.kpOpts.herodots !== 'on' || hero.querySelector('.kp-hero-dots')) return false;
+        if (('ontouchstart' in window) || navigator.maxTouchPoints > 0 || innerWidth <= 991) return false;
+        const wrap = document.createElement('div'), canvas = document.createElement('canvas');
+        wrap.className = 'kp-hero-dots'; wrap.setAttribute('aria-hidden', 'true');
+        // behind the hero's content (the hero is its own stacking context), above its background
+        wrap.style.cssText = 'position:absolute;left:0;right:0;z-index:-1;pointer-events:none';
+        canvas.style.cssText = 'display:block;width:100%';
+        wrap.appendChild(canvas); hero.insertBefore(wrap, hero.firstChild);
+        // from the nav fill's bottom edge (8rem) down behind the client cards, whose old static dot pattern this field replaces
+        const cards = hero.querySelector('.home-hero-client-wrap'), old = hero.querySelector('.bg-dots.home-vid-dots');
+        if (old) old.style.display = 'none';
+        const fit = () => {
+            if (!wrap.isConnected) return removeEventListener('resize', fit); // Barba took the page away
+            const hb = hero.getBoundingClientRect(), top = parseRem(80);
+            const bottom = cards ? cards.getBoundingClientRect().bottom - hb.top : hb.height;
+            wrap.style.top = top + 'px'; wrap.style.height = Math.max(0, Math.round(bottom - top)) + 'px';
+        };
+        fit();
+        addEventListener('resize', fit); // registered before the grid's own resize, so that one measures the new size
+        const grid = window.kpDotGrid(canvas, Object.assign({
+            rgb: { x: '46', y: '46', z: '46' },
+            // the sub copy by its letters (a padded box would cut into the rows above the cards), its globe as a box
+            protect: [{ el: title }, { el: hero.querySelector('.home-hero-sub') }, { el: hero.querySelector('.home-hero-sub-wrap .ic-embed'), as: 'box', pad: .4 }, { edge: 'top' }],
+            halo: 1.4, fade: 2.4, rest: 'near', spot: 26, restFrom: cards, calm: true, relax: true, wrap: .5, repel: 1, hold: true
+        }, SITE));
+        // wait for the headline: konpo-min builds kpHero once the loader lets it (up to ~20s on a slow load)
+        const t0 = Date.now(), go = () => requestAnimationFrame(() => { fit(); grid.intro() });
+        const wait = () => {
+            const tl = window.gsap && gsap.getById && gsap.getById('kpHero');
+            if (tl) tl.then(go); else if (wrap.isConnected) Date.now() - t0 < 30000 ? setTimeout(wait, 100) : go();
+        };
+        wait();
+        canvas.kpDots = grid; // for checks from the console
+        return grid;
     };
 })();
