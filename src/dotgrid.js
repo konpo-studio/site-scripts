@@ -113,7 +113,8 @@
                 const y = sy * j + oy;
                 for (let i = i0; i <= i1; i++) {
                     const x = sx * i + ox, dx = x - m.x, dy = y - m.y, d = Math.sqrt(dx * dx + dy * dy);
-                    let r = size * 4.8 * shape(d) * amp * pulse;
+                    const s = shape(d) * amp; // how far into the bulge this dot sits (0 = resting grid, 1 = centre)
+                    let r = size * 4.8 * s * pulse;
                     if (r < 1) r = 1;
                     // ripple: how much ring sits on this dot (0 = none), and the outward shove for the wave version
                     let lift = 0, wx = 0, wy = 0;
@@ -124,6 +125,8 @@
                         lift += g;
                         if (wave) { wx += ex / ed * g * RIP.shove; wy += ey / ed * g * RIP.shove }
                     }
+                    // the bulge only pops once (its spring below): the rings leave its inner half alone and fade in across the outer half
+                    if (s > 0 && lift) { const c = s >= .5 ? 0 : 1 - s * s * (12 - 16 * s); lift *= c; wx *= c; wy *= c }
                     if (lift < .01) lift = wx = wy = 0; // the ring's far tails: leave those dots in the batched fill
                     if (lift > 1.5) lift = 1.5;
                     r += top * RIP.lift * lift;
@@ -173,11 +176,12 @@
             else if (o.enter === 'grow') { const h = (o.hover || canvas.parentElement).getBoundingClientRect(); goal = p.x >= h.left && p.x <= h.right && p.y >= h.top && p.y <= h.bottom ? 1 : 0 }
             const ampWas = amp;
             amp += (goal - amp) * k; if (Math.abs(goal - amp) < .002) amp = goal;
-            // the bulge's spring: squeezed to 78% while the button is down, a kick on release, bounces back to 1
+            // the bulge's spring: eases down to 78% while the button is down (critically damped, no wobble), and on release
+            // a kick pops it past 1 once (about 10%) before it settles (the swing back is 0.4%, too small to see)
             const pulseWas = pulse;
             if (pressed || pulse !== 1 || pulseV) {
                 const h = Math.min(dt, 33) / 1000;
-                pulseV += (300 * ((pressed ? .78 : 1) - pulse) - 14 * pulseV) * h;
+                pulseV += (300 * ((pressed ? .78 : 1) - pulse) - (pressed ? 35 : 24) * pulseV) * h;
                 pulse += pulseV * h;
                 if (!pressed && Math.abs(pulse - 1) < .001 && Math.abs(pulseV) < .01) { pulse = 1; pulseV = 0 }
             }
@@ -220,10 +224,10 @@
             if (o.click === 'off' || e.button !== 0 || e.pointerType === 'touch' || reduced() || !visible || !inBlock(e.clientX, e.clientY) || inLink(e)) return;
             ripple(e); pressed = true; wake();
         };
-        const up = () => { if (!pressed) return; pressed = false; pulseV += 7; wake() };
+        const up = () => { if (!pressed) return; pressed = false; pulseV += 10; wake() };
         const tap = (e) => {
             if (lastType !== 'touch' || o.click === 'off' || reduced() || !visible || !inBlock(e.clientX, e.clientY) || inLink(e)) return;
-            ripple(e); pulse = .78; pulseV = 7; wake();
+            ripple(e); pulse = .78; pulseV = 10; wake();
         };
         // Link text: a ripple from the pointer each time it moves onto the title's text (the glyph lines, not the
         // whole block), at most every 0.45s, and only while the text sits inside a live link. 'repeat' adds a softer
