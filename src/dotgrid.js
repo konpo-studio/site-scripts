@@ -489,7 +489,8 @@
     // behind the client cards (it replaces their old static dot pattern, so the cards' gaps are part of the same grid), keeping
     // clear of the headline's letters and the globe + sub copy, with the hero rules Jean picked in the prototype on 2026-10-29:
     // tight margin, resting grid near the pointer (and always in the cards' gaps, as before), bulge fades on the words and
-    // relaxes when still, dots trace the words and slide away from them, click pulse + ripple. Desktop pointers only, like the title
+    // relaxes when still, dots trace the words, click pulse + ripple. Unlike the title grids nothing is pushed off the grid
+    // (no lens push, no slide away from the words): the dots only grow and shrink in place. Desktop pointers only, like the title
     // grids (no touch, wider than 991px). The grid stays blank until the headline's own reveal (konpo-min's kpHero timeline)
     // has finished, then one soft pulse of resting-size dots runs out from the words (Jean, 1.9.2: "way more subtle"), and the
     // dots run up to just under the nav line.
@@ -520,8 +521,8 @@
             // the sub copy by its letters (a padded box would cut into the rows above the cards), its globe as a box; the wave
             // runs out from the headline only
             protect: [{ el: title, wave: true }, { el: hero.querySelector('.home-hero-sub') }, { el: hero.querySelector('.home-hero-sub-wrap .ic-embed'), as: 'box', pad: .4 }, { edge: 'top' }], // the top edge is the nav line
-            halo: 1.4, fade: 2.4, rest: 'near', spot: 26, restFrom: cards, calm: true, relax: true, wrap: .5, repel: 1, hold: true
-        }, SITE));
+            halo: 1.4, fade: 2.4, rest: 'near', spot: 26, restFrom: cards, calm: true, relax: true, wrap: .5, hold: true
+        }, SITE, { lens: 0 })); // every dot stays on its grid point (Jean, 1.9.2: no dots that look pushed), so no lens push or slide
         // wait for the headline: konpo-min builds kpHero once the loader lets it (up to ~20s on a slow load)
         const t0 = Date.now(), go = () => requestAnimationFrame(() => { fit(); grid.intro() });
         const wait = () => {
