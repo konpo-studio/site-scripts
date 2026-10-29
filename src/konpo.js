@@ -4481,17 +4481,45 @@ const mainScript = () => {
                     })
                     // 1.15.1: each row reveals as it scrolls in. The rows used to hang off the section's timeline 0.3s apart, so on a
                     // fast scroll the 30th row waited ~9s. Rows that arrive together still stagger, 0.6s at most for the lot.
+                    // 1.15.2: splitting all 36 rows into letters up front (and hiding them a cell at a time, which re-read the page's
+                    // styles per cell) took ~1.4s behind the page-change curtain, so About sat on its title that much longer. Rows now
+                    // wait with their text at opacity 0, get split a row at a time while the page is idle, and a row that scrolls in
+                    // before its turn is split right then. Cells hidden on desktop (the phone copies) aren't split at all.
                     const awardRows = $(data.next.container).find('.abt-award-main-item').get();
-                    awardRows.forEach(el => {
-                        el._kpCells = ['date', 'project', 'type', 'award'].map(k => new SplitText($(el).find(`.abt-award-${k} .abt-award-sub-item-txt`), typeOpts.chars).chars);
-                        el._kpCells.forEach(chars => gsap.set(chars, {yPercent: 60, autoAlpha: 0}));
-                    })
+                    if (!document.getElementById('kp-aw-css')) {
+                        const css = document.createElement('style');
+                        css.id = 'kp-aw-css';
+                        css.textContent = '.kp-aw-wait .abt-award-sub-item-txt{opacity:0}';
+                        document.head.appendChild(css);
+                    }
+                    awardRows.forEach(el => el.classList.add('kp-aw-wait'));
+                    const prepRows = rows => {
+                        rows = rows.filter(el => !el._kpCells);
+                        if (!rows.length) return;
+                        // which cells show is read before any split, so the splits don't force a layout per cell
+                        const shown = rows.map(el => ['date', 'project', 'type', 'award'].map(k => $(el).find(`.abt-award-${k} .abt-award-sub-item-txt`).get().filter(c => c.getClientRects().length)));
+                        rows.forEach((el, r) => { el._kpCells = shown[r].map(cells => cells.length ? new SplitText(cells, typeOpts.chars).chars : []) });
+                        gsap.set(rows.flatMap(el => el._kpCells.flat()), {yPercent: 60, autoAlpha: 0});
+                        rows.forEach(el => el.classList.remove('kp-aw-wait'));
+                    }
+                    const idle = window.requestIdleCallback || (f => setTimeout(() => f({timeRemaining: () => 8}), 50));
+                    const queue = awardRows.slice();
+                    const work = deadline => {
+                        if (!queue[0] || !queue[0].isConnected) return;
+                        do { prepRows([queue.shift()]) } while (queue.length && deadline.timeRemaining() > 8);
+                        if (queue.length) idle(work, {timeout: 2000});
+                    }
+                    // starts once the page change has settled (the curtain is up by ~2.3s after this runs)
+                    setTimeout(() => idle(work, {timeout: 2000}), 2500);
                     ScrollTrigger.batch(awardRows, {
                         start: 'top bottom-=8%', once: true,
-                        onEnter: (batch) => batch.forEach((el, i) => {
-                            const at = i * Math.min(.08, .6 / batch.length);
-                            el._kpCells.forEach((chars, k) => gsap.to(chars, {yPercent: 0, autoAlpha: 1, stagger: 0.01, duration: .4, ease: gOpts.ease, delay: at + k * .1}));
-                        })
+                        onEnter: (batch) => {
+                            prepRows(batch);
+                            batch.forEach((el, i) => {
+                                const at = i * Math.min(.08, .6 / batch.length);
+                                el._kpCells.forEach((chars, k) => gsap.to(chars, {yPercent: 0, autoAlpha: 1, stagger: 0.01, duration: .4, ease: gOpts.ease, delay: at + k * .1}));
+                            })
+                        }
                     })
                     const items = $(data.next.container).find('.abt-award-main-cms .abt-award-main-item')
                     const thumbs = $(data.next.container).find('.abt-award-thumb-cms')
