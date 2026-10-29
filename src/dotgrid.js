@@ -10,7 +10,7 @@
 // letter. Inside the clear margin there is never a dot; the bulge, ripple and trace shrink to fit outside it. The rest of
 // the hero rules: the resting grid only near the pointer, the bulge fading on the words and easing down when the pointer
 // rests, dots on the margin's edge swelling and sliding away as the bulge comes close, and an intro wave that runs out from
-// the words once (held until intro() is called). Without `protect` none of this runs and the title grids draw as before.
+// the words once (from the entries marked wave if any; held until intro() is called). Without `protect` none of this runs and the title grids draw as before.
 (function () {
     const parseRem = (v) => v / 10 * parseFloat(getComputedStyle(document.documentElement).fontSize);
     const TAU = Math.PI * 2;
@@ -103,13 +103,18 @@
         function mask() {
             rem = parseRem(10);
             const gw = Math.ceil(cw / MS), gh = Math.ceil(ch / MS);
-            const mc = document.createElement('canvas'); mc.width = gw; mc.height = gh;
-            const g = mc.getContext('2d', { willReadFrequently: true });
-            g.setTransform(1 / MS, 0, 0, 1 / MS, 0, 0); g.fillStyle = '#000';
-            // the intro wave runs out from the words alone, so they also go into a second mask (w) without the boxes and edges
-            const wc = document.createElement('canvas'); wc.width = gw; wc.height = gh;
-            const w = wc.getContext('2d', { willReadFrequently: true });
-            w.setTransform(1 / MS, 0, 0, 1 / MS, 0, 0);
+            const layer = () => {
+                const c = document.createElement('canvas'); c.width = gw; c.height = gh;
+                const x = c.getContext('2d', { willReadFrequently: true }); x.setTransform(1 / MS, 0, 0, 1 / MS, 0, 0); return x;
+            };
+            const toField = (x) => {
+                const px = x.getImageData(0, 0, gw, gh).data, f = new Float64Array(gw * gh);
+                for (let i = 0; i < gw * gh; i++) f[i] = px[i * 4 + 3] > 60 ? 0 : 1e20;
+                edt(f, gw, gh); return f;
+            };
+            // g: everything protected; w: the letters alone (the bulge calms near them); v: the letters the intro wave runs
+            // out from (entries marked wave, else all of them)
+            const g = layer(), w = layer(), waves = o.protect.some((q) => q.wave), v = waves && layer();
             const cr = canvas.getBoundingClientRect(), rg = document.createRange(), desc = {};
             for (const q of o.protect) {
                 if (q.edge) { g.fillRect(0, q.edge === 'top' ? -MS : ch - MS, cw, MS * 2); continue }
@@ -120,19 +125,20 @@
                     g.beginPath(); g.roundRect ? g.roundRect(b.left - cr.left - pad, b.top - cr.top - pad, b.width + pad * 2, b.height + pad * 2, pad + 4) : g.rect(b.left - cr.left - pad, b.top - cr.top - pad, b.width + pad * 2, b.height + pad * 2); g.fill();
                     continue;
                 }
+                const into = [g, w].concat(v && q.wave ? [v] : []);
                 const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
                 for (let n = tw.nextNode(); n; n = tw.nextNode()) {
                     if (n.parentElement.closest('.kp-sr')) continue; // the screen-reader copy of split words
                     const cs = getComputedStyle(n.parentElement), font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-                    g.font = w.font = font;
+                    for (const x of into) x.font = font;
                     if (!(font in desc)) desc[font] = g.measureText('Hg').fontBoundingBoxDescent || parseFloat(cs.fontSize) * .22;
                     const t = n.data;
                     for (let i = 0; i < t.length; i++) {
-                        if (t[i] === ' ' || t[i] === '\n' || t[i] === ' ') continue;
+                        if (t[i] === ' ' || t[i] === '\n' || t[i] === '\u00a0') continue;
                         rg.setStart(n, i); rg.setEnd(n, i + 1);
                         const b = rg.getClientRects()[0];
                         if (!b || b.width < 1) continue;
-                        g.fillText(t[i], b.left - cr.left, b.bottom - desc[font] - cr.top); w.fillText(t[i], b.left - cr.left, b.bottom - desc[font] - cr.top);
+                        for (const x of into) x.fillText(t[i], b.left - cr.left, b.bottom - desc[font] - cr.top);
                     }
                     // a struck word (.txt-disable draws its line as a pseudo-element): the line counts as ink too
                     if (n.parentElement.closest('.txt-disable') || /line-through/.test(cs.textDecorationLine)) {
@@ -141,12 +147,7 @@
                     }
                 }
             }
-            const px = g.getImageData(0, 0, gw, gh).data, field = new Float64Array(gw * gh);
-            for (let i = 0; i < gw * gh; i++) field[i] = px[i * 4 + 3] > 60 ? 0 : 1e20;
-            edt(field, gw, gh);
-            const wx = w.getImageData(0, 0, gw, gh).data, words = new Float64Array(gw * gh);
-            for (let i = 0; i < gw * gh; i++) words[i] = wx[i * 4 + 3] > 60 ? 0 : 1e20;
-            edt(words, gw, gh);
+            const field = toField(g), words = toField(w), wave = v ? toField(v) : words;
             H = { field, words, gw, gh };
             const N = (rw + 1) * (rh + 1), halo = o.halo * rem, fade = o.fade * rem;
             const C = new Float32Array(N), D = new Float32Array(N), WD = new Float32Array(N), S = new Float32Array(N), GX = new Float32Array(N), GY = new Float32Array(N);
@@ -154,7 +155,7 @@
             let maxU = 0;
             for (let j = 0; j <= rh; j++) for (let i = 0; i <= rw; i++) {
                 const k = j * (rw + 1) + i, x = sx * i + ox, y = sy * j + oy, d = dist(x, y);
-                D[k] = d; C[k] = smooth(halo, halo + fade, d); WD[k] = dist(x, y, words);
+                D[k] = d; C[k] = smooth(halo, halo + fade, d); WD[k] = dist(x, y, wave);
                 if (C[k] > 0 && WD[k] - halo > maxU) maxU = WD[k] - halo;
                 if (from != null) S[k] = smooth(from - step * 2.5, from + 2, y); // fades in over the two rows above
                 const gx = dist(x + MS, y) - dist(x - MS, y), gy = dist(x, y + MS) - dist(x, y - MS), gl = Math.hypot(gx, gy) || 1;
@@ -500,8 +501,9 @@
         addEventListener('resize', fit); // registered before the grid's own resize, so that one measures the new size
         const grid = window.kpDotGrid(canvas, Object.assign({
             rgb: { x: '46', y: '46', z: '46' },
-            // the sub copy by its letters (a padded box would cut into the rows above the cards), its globe as a box
-            protect: [{ el: title }, { el: hero.querySelector('.home-hero-sub') }, { el: hero.querySelector('.home-hero-sub-wrap .ic-embed'), as: 'box', pad: .4 }, { edge: 'top' }],
+            // the sub copy by its letters (a padded box would cut into the rows above the cards), its globe as a box; the wave
+            // runs out from the headline only
+            protect: [{ el: title, wave: true }, { el: hero.querySelector('.home-hero-sub') }, { el: hero.querySelector('.home-hero-sub-wrap .ic-embed'), as: 'box', pad: .4 }, { edge: 'top' }],
             halo: 1.4, fade: 2.4, rest: 'near', spot: 26, restFrom: cards, calm: true, relax: true, wrap: .5, repel: 1, hold: true
         }, SITE));
         // wait for the headline: konpo-min builds kpHero once the loader lets it (up to ~20s on a slow load)

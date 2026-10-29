@@ -29,6 +29,7 @@ Rolling back is the same in reverse: point the tag back at the previous version 
 
 ## Releases
 
+- **v1.9.1**: the Home hero's intro wave runs out from the headline alone. In v1.9.0 the sub copy sent out its own ring at the same moment, so two waves ran at once. Nothing else changes (the clear margin round the sub copy and the calm-on-the-words rule still cover both). Roll back to v1.9.0.
 - **v1.9.0**: dots in the Home hero, on staging only until the switch says otherwise.
   - The same dots as the title grids (size, bulge, 120 Hz trail, lens push, click pulse and ripple) across the hero, from under the nav fill down behind the client cards. They replace the cards' old static dot pattern, so the gaps between the cards are part of the same grid.
   - The headline stays readable: a distance field built from its letters keeps a clear margin round them (and round the sub copy and its globe), with no dot inside it ever, and the bulge, ripple and trace shrink to fit outside it. The rules Jean picked in the prototype: the resting grid shows only near the pointer (and in the cards' gaps, as before), the bulge fades while the pointer is on the words and eases down when it rests, dots on the margin's edge swell and slide away as the bulge comes near, so they trace the words.
