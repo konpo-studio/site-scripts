@@ -259,8 +259,8 @@ function kpNativeVelocity(lenis) {
             ['work', 'Work', 'home-proj'], ['testimonials', 'Testimonial', 'home-testi'], ['clients', 'Clients', 'home-client'],
             ['contact', 'Contact', 'footer']],
         about: [['intro', 'Intro', 'abt-hero'], ['numbers', 'Numbers', 'abt-statis'], ['gallery', 'Gallery', 'abt-gall'],
-            ['pillars', 'Pillars', 'abt-val'], ['team', 'Team', 'abt-team'], ['challenge', 'FAQs', 'ser-faq'],
-            ['awards', 'Awards', 'abt-award'], ['testimonials', 'Testimonials', 'abt-testi'], ['contact', 'Contact', 'footer']],
+            ['pillars', 'Pillars', 'abt-val'], ['team', 'Team', 'abt-team'], ['awards', 'Awards', 'abt-award'],
+            ['testimonials', 'Testimonials', 'abt-testi'], ['challenge', 'FAQs', 'ser-faq'], ['contact', 'Contact', 'footer']],
         ads: [['design system', 'Intro', 'ads-hero'], ['definition', 'What it is', 'ads-intro'], ['benefits', 'Benefits', 'ads-cta'],
             ['what you get', 'What you get', 'ads-get'], ['case study', 'Surge story', 'ads-quote ads-surge'],
             ['review', 'Readiness review', 'ads-review'], ['work', 'Examples', 'ads-client'], ['challenge', 'FAQs', 'ads-faq'],
@@ -486,6 +486,8 @@ function kpNativeVelocity(lenis) {
                 if (el) out.push({el, label: s[1], key: s[0]});
             });
             if (out.length < 3) return [];
+            // in page order, whatever the order above, so a section moved in the Designer keeps the right stop
+            out.sort((a, b) => a.el.compareDocumentPosition(b.el) & 4 ? -1 : 1);
             out[0].top = 1;
         }
         return out;
@@ -581,7 +583,7 @@ function kpNativeVelocity(lenis) {
         R.raf = 0;
         R.onScroll = () => {
             if (dir) dir();
-            if (!R.raf) R.raf = requestAnimationFrame(() => { R.raf = 0; tick(); });
+            if (!R.raf) R.raf = requestAnimationFrame(() => { if (R) { R.raf = 0; tick(); } });
         };
         R.onResize = () => { home(); };
         addEventListener('scroll', R.onScroll, {passive: true});
@@ -595,6 +597,8 @@ function kpNativeVelocity(lenis) {
     function destroy() {
         if (tipEl) tipEl.classList.remove('on');
         if (!R) return;
+        // a frame asked for by the last scroll can still be queued when the page changes
+        cancelAnimationFrame(R.raf);
         removeEventListener('scroll', R.onScroll);
         removeEventListener('resize', R.onResize);
         if (R.ro) R.ro.disconnect();
@@ -2339,7 +2343,8 @@ const mainScript = () => {
                     circles.push(this.circleObject());
                 }
             } else {
-                for (let i = 1; i <= 2; i++) {
+                // 7 on phones since 1.15.1, when the box went full width and up to the nav (head CSS): 2 left gaps at the top
+                for (let i = 1; i <= 7; i++) {
                     circles.push(this.circleObject());
                 }
             }
@@ -2370,8 +2375,8 @@ const mainScript = () => {
             this.toolangular = this.pillShape(this.pillSvg[22]);
             this.toollottiefiles = this.pillShape(this.pillSvg[23]);
             this.noslop = this.pillShape(this.pillSvg[24]);
-            // Award and stack marks (1.13.0): all 13 on desktop, the first 7 (the awards) on tablets, the first 4 on phones.
-            let marks = $(window).width() > 991 ? 13 : $(window).width() > 767 ? 7 : 4;
+            // Award and stack marks (1.13.0): all 13 on desktop, the first 7 (the awards) on tablets and (since 1.15.1) phones.
+            let marks = $(window).width() > 991 ? 13 : 7;
             this.marks = [];
             for (let i = 0; i < marks; i++) {
                 this.marks.push(this.pillShape(this.pillSvg[25 + i]));
@@ -4474,16 +4479,19 @@ const mainScript = () => {
                         .from(subTxt.chars, { yPercent: 60, autoAlpha: 0, stagger: .04, duration: .6, ease: gOpts.ease}, '<=.1')
                         .from($(el).find('.line'), {scaleX: 0, transformOrigin: 'left', duration: 1.5, ease: gOpts.ease}, '0')
                     })
-                    $(data.next.container).find('.abt-award-main-item').each((idx, el) => {
-                        let dateTxt = new SplitText($(el).find('.abt-award-date .abt-award-sub-item-txt'), typeOpts.chars)
-                        let nameTxt = new SplitText($(el).find('.abt-award-project .abt-award-sub-item-txt'), typeOpts.chars)
-                        let typeTxt = new SplitText($(el).find('.abt-award-type .abt-award-sub-item-txt'), typeOpts.chars)
-                        let awardTxt = new SplitText($(el).find('.abt-award-award .abt-award-sub-item-txt'), typeOpts.chars)
-                        tl
-                        .from(dateTxt.chars, {yPercent: 60, autoAlpha: 0, stagger: 0.01, duration: .4, ease: gOpts.ease}, `${0 + idx * .3}`)
-                        .from(nameTxt.chars, {yPercent: 60, autoAlpha: 0, stagger: 0.01, duration: .4, ease: gOpts.ease}, '<=.1')
-                        .from(typeTxt.chars, {yPercent: 60, autoAlpha: 0, stagger: 0.01, duration: .4, ease: gOpts.ease}, '<=.1')
-                        .from(awardTxt.chars, {yPercent: 60, autoAlpha: 0, stagger: 0.01, duration: .4, ease: gOpts.ease}, '<=.1')
+                    // 1.15.1: each row reveals as it scrolls in. The rows used to hang off the section's timeline 0.3s apart, so on a
+                    // fast scroll the 30th row waited ~9s. Rows that arrive together still stagger, 0.6s at most for the lot.
+                    const awardRows = $(data.next.container).find('.abt-award-main-item').get();
+                    awardRows.forEach(el => {
+                        el._kpCells = ['date', 'project', 'type', 'award'].map(k => new SplitText($(el).find(`.abt-award-${k} .abt-award-sub-item-txt`), typeOpts.chars).chars);
+                        el._kpCells.forEach(chars => gsap.set(chars, {yPercent: 60, autoAlpha: 0}));
+                    })
+                    ScrollTrigger.batch(awardRows, {
+                        start: 'top bottom-=8%', once: true,
+                        onEnter: (batch) => batch.forEach((el, i) => {
+                            const at = i * Math.min(.08, .6 / batch.length);
+                            el._kpCells.forEach((chars, k) => gsap.to(chars, {yPercent: 0, autoAlpha: 1, stagger: 0.01, duration: .4, ease: gOpts.ease, delay: at + k * .1}));
+                        })
                     })
                     const items = $(data.next.container).find('.abt-award-main-cms .abt-award-main-item')
                     const thumbs = $(data.next.container).find('.abt-award-thumb-cms')
