@@ -1230,36 +1230,102 @@ const mainScript = () => {
     }
     hoverNav()
     function inputInteractionInit(formEl) {
-        //Normal input
-        $(`${formEl} .input-grp .input-field`).on('focus', function(e) {
+        //Normal input. keyup alone misses autofill, paste from a menu, dictation and password managers, so the
+        //filled state is re-read on input too (and on focus/blur, in case a value arrived with no event at all).
+        const fields = $(`${formEl} .input-grp .input-field`)
+        const syncFilled = function() {
+            if ($(this).val() != '') {
+                $(this).parent().addClass('filled')
+            } else {
+                $(this).parent().removeClass('filled')
+            }
+        }
+        fields.on('focus', function() {
             $(this).parent().addClass('active')
+            syncFilled.call(this)
             updateProg(allowedSteps)
         })
-        $(`${formEl} .input-grp .input-field`).on('blur', function(e) {
+        fields.on('blur', function() {
             $('.input-grp').removeClass('active')
+            syncFilled.call(this)
             updateProg(allowedSteps)
         })
-        $(`${formEl} .input-grp .input-field`).on('keyup', function(e) {
-            if ($(this).val() != '') {
-                $(this).parent().addClass('filled')
-            } else {
-                $(this).parent().removeClass('filled')
-            }
-            updateProg(allowedSteps)
-        })
-        $(`${formEl} .input-grp .input-field`).on('change', function(e) {
-            if ($(this).val() != '') {
-                $(this).parent().addClass('filled')
-            } else {
-                $(this).parent().removeClass('filled')
-            }
+        fields.on('keyup input change', function() {
+            syncFilled.call(this)
             updateProg(allowedSteps)
         })
     }
 
+    // Contact form (1.15.3): a contact field counts when it is valid, not just non-empty, so the Send ring
+    // can't fill on an email like "a" and the browser's validation bubble never has a reason to show.
+    function kpCtcOk(el) {
+        const v = (el.value || '').trim()
+        if (!v || !el.checkValidity()) return false
+        return el.type != 'email' || /\S+@\S+\.\S+/.test(v)
+    }
+    function kpCtcLast() {
+        return $('.pop-ctc-main .pop-ctc-step.step-last .input-field[required]').filter((i, el) => kpCtcOk(el)).length >= 2 ? 1 : 0
+    }
+    function kpCtcReady() {
+        return $('.pop-ctc-form-inner .pop-ctc-step.allow').length + kpCtcLast() == $('.pop-ctc-form-inner .pop-ctc-step').length
+    }
+    // Keyboard: Enter in a text field moves to the next one; from the last text field, or Cmd/Ctrl+Enter in the
+    // message, it sends when everything is answered and otherwise scrolls the first unanswered step into view (the form
+    // scrolls inside .pop-ctc-form on desktop and .pop-ctc-inner on phones, so scrollIntoView rather than a fixed box) and flashes
+    // its title (or focuses the contact field that is missing). The browser never submits on its own, so the
+    // required hidden step inputs can't block silently. The Send button leaves the tab order while it is invisible
+    // and the ring shows a focus outline when it has keyboard focus.
+    function kpCtcKeys() {
+        const form = document.querySelector('.pop-ctc-main-wrap')
+        if (!form || form._kpKeys) return
+        form._kpKeys = true
+        if (!document.getElementById('kp-ctc-css')) {
+            const st = document.createElement('style')
+            st.id = 'kp-ctc-css'
+            st.textContent = '.pop-ctc-step.kp-nudge .pop-ctc-step-title{animation:kpNudge 1s ease}@keyframes kpNudge{30%{color:var(--purple)}}.pop-ctc-act-wrap.kp-focus .pop-ctc-prog{outline:2px solid var(--white);outline-offset:4px}'
+            document.head.appendChild(st)
+        }
+        const btn = form.querySelector('.pop-ctc-submit-btn')
+        btn.setAttribute('tabindex', '-1')
+        const fields = () => $(form).find('.pop-ctc-step.step-last .input-field').get()
+        const go = (from) => {
+            if (kpCtcReady()) { btn.click(); return }
+            const missing = $(form).find('.pop-ctc-step').not('.step-last').not('.allow').first()
+            if (missing.length) {
+                if (from) from.blur()
+                missing.get(0).scrollIntoView({behavior: 'smooth', block: 'start'})
+                missing.removeClass('kp-nudge')
+                void missing.get(0).offsetWidth
+                missing.addClass('kp-nudge')
+                setTimeout(() => missing.removeClass('kp-nudge'), 1100)
+                return
+            }
+            const bad = fields().find(el => el.required && !kpCtcOk(el))
+            if (bad) { bad.focus(); bad.select && bad.select() }
+        }
+        form.addEventListener('keydown', (e) => {
+            const el = e.target.closest && e.target.closest('.input-field')
+            if (!el || e.key != 'Enter' || e.isComposing) return
+            if (el.tagName == 'TEXTAREA') {
+                if (!(e.metaKey || e.ctrlKey)) return
+                e.preventDefault()
+                go(el)
+                return
+            }
+            e.preventDefault()
+            const all = fields(), next = all[all.indexOf(el) + 1]
+            if (next) next.focus()
+            else go(el)
+        })
+        form.addEventListener('submit', (e) => {
+            if (!kpCtcReady()) { e.preventDefault(); e.stopImmediatePropagation(); go(null) }
+        }, true)
+        btn.addEventListener('focus', () => { try { if (btn.matches(':focus-visible')) $(btn).closest('.pop-ctc-act-wrap').addClass('kp-focus') } catch (err) {} })
+        btn.addEventListener('blur', () => $(btn).closest('.pop-ctc-act-wrap').removeClass('kp-focus'))
+    }
     let allowedSteps, popupSubmitTxt, submitTxtanimated = false;
     function updateProg(steps) {
-        let lastStep = $(`.pop-ctc-main .pop-ctc-step.step-last`).find('.input-grp.filled .input-field[required]').length >= 2 ? 1 : 0;
+        let lastStep = kpCtcLast();
         let percent = (steps + lastStep) / $('.pop-ctc-form-inner .pop-ctc-step').length;
         if (percent == 0) {
             $('.pop-ctc-main .pop-ctc-act-wrap').addClass('hidden')
@@ -1274,7 +1340,7 @@ const mainScript = () => {
                     gsap.to(popupSubmitTxt.chars, {yPercent: 0, opacity: 1, duration: .3, stagger: 0.02})
                     submitTxtanimated = true;
                 }
-                $('.pop-ctc-main .pop-ctc-submit-btn').addClass('active')
+                $('.pop-ctc-main .pop-ctc-submit-btn').addClass('active').removeAttr('tabindex')
             }})
         } else {
             gsap.to('.pop-ctc-prog-inner', {'--currProg': `${percent * 361}deg`, duration: .6, ease: gOpts.ease, overwrite: true, onStart: () => {
@@ -1283,7 +1349,7 @@ const mainScript = () => {
                     gsap.to(popupSubmitTxt.chars, {yPercent: -60, opacity: 0, duration: .3, stagger: 0.02})
                     submitTxtanimated = false;
                 }
-                $('.pop-ctc-main .pop-ctc-submit-btn').removeClass('active')
+                $('.pop-ctc-main .pop-ctc-submit-btn').removeClass('active').attr('tabindex', -1)
             }})
         }
     }
@@ -1361,6 +1427,7 @@ const mainScript = () => {
                 }
             })
             inputInteractionInit('.pop-ctc-main')
+            kpCtcKeys()
             $('[data-popup="contact"]').on('click', function(e) {
                 e.preventDefault();
                 if ($('.pop-ctc').hasClass('active')) {
