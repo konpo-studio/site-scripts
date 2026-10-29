@@ -29,6 +29,11 @@ Rolling back is the same in reverse: point the tag back at the previous version 
 
 ## Releases
 
+- **v1.8.0**: a new title dot grid, on staging only until the switch says otherwise.
+  - The grids behind the section titles and case-study heroes are drawn at the screen's pixel density, so the dots are sharp on retina screens (the old canvas was 1x and got stretched). Same lattice, dot sizes and falloff as before. Only the patch around the bulge is repainted, and the grid goes to sleep when nothing moves: about 6x less work a frame on a title and 12x less on a case-study hero, and nothing at all at rest.
+  - The settings Jean picked: the bulge trails at the same speed on every screen (the 120 Hz feel; before, it moved half as fast at 60 Hz), it grows in when the pointer enters the block and shrinks away when it leaves, and dots inside it are pushed outward by up to 20% like a lens. A click squeezes the bulge, it bounces back on release, and a ripple runs out through the grid. On the next-project hero, moving onto the title text sends a ripple too (only while it's a live link; a click there leaves the page, so it gets none). On touch screens the resting grid now shows, and a tap ripples.
+  - Switch: `data-dotgrid="new"` or `"old"` on the konpo-min tag, or `?dotgrid=` on a URL. Without it the new grid runs on konpo.webflow.io and the old one on konpo.studio, so a prod publish doesn't change the live look. Readable source in `src/dotgrid.js`, the same file the local prototype runs.
+  - konpo-min goes from 35.6KB to 39.2KB gzipped. Roll back to v1.7.0.
 - **v1.7.0**: the page rail (kpRail), and the new case-study layout.
   - A rail of section stops runs down the left column on the current case studies (First Chair, Fyler, Surge, Clinical Ink, Relias), Home, About and the four service pages. Each stop is an icon with a tooltip: the section you're in lights up purple, the ones you've passed go light, and clicking one (or Enter on it) scrolls there. It replaces the old progress line on those pages, which comes back everywhere else.
   - Below 992px the same stops sit in a bar at the bottom of the screen. It comes up when the header leaves (scrolling down) and goes when it comes back. /ai-design-system has no side column, so it only gets the bar, and it shows the bar by scroll direction since its header never hides.

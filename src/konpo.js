@@ -2,6 +2,8 @@
 //   data-smooth-scroll="off" (default) native scrolling; "on" brings back Lenis's smoothed wheel scrolling
 //   data-headlines="gradient" (default) scroll headlines fade grey to dark line by line; "reveal" brings back the letter/word reveals;
 //   "cases" uses the gradient on case studies only and keeps the reveals elsewhere, with Home's scroll headlines going word by word
+//   data-dotgrid="new" the title dot grids from src/dotgrid.js (sharp on retina, asleep at rest, click and link-text ripples);
+//   "old" the original grid. Without the attribute: new on staging (*.webflow.io), old on konpo.studio.
 // e.g. https://www.konpo.studio/about?smooth-scroll=on&headlines=reveal shows the old behaviour without republishing.
 (function kpOptions() {
     function opt(name, fallback) {
@@ -12,7 +14,8 @@
         const tag = document.querySelector('script[src*="konpo-min"]');
         return (tag && tag.getAttribute('data-' + name)) || fallback;
     }
-    window.kpOpts = {smoothScroll: opt('smooth-scroll', 'off') === 'on', headlines: opt('headlines', 'gradient')};
+    window.kpOpts = {smoothScroll: opt('smooth-scroll', 'off') === 'on', headlines: opt('headlines', 'gradient'),
+        dotgrid: opt('dotgrid', /\.webflow\.io$/.test(location.hostname) ? 'new' : 'old')};
     if (!window.kpOpts.smoothScroll) {
         const style = document.createElement('style');
         // Lenis's own CSS only sets this in smooth mode; popups still shouldn't hand their scroll on to the page
@@ -3124,6 +3127,8 @@ const mainScript = () => {
         })
     }
     function initTitleGrid(el, rgb = { x: '46', y: '46', z: '46' }) {
+        // 1.8.0: the new grid (src/dotgrid.js, after kpOptions in dist) takes the canvas when the dotgrid switch is "new"
+        if (window.kpDotGridSite && kpDotGridSite(el.get(0), rgb)) return
         let canvas = el.get(0),
             ctx = canvas.getContext('2d'),
             points = [],
