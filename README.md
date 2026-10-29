@@ -29,6 +29,7 @@ Rolling back is the same in reverse: point the tag back at the previous version 
 
 ## Releases
 
+- **v1.14.1**: fixes 1.14.0, whose sprite URLs pointed at the 1.13.0 tag (where the thirteen new icon files don't exist, so they 404'd and the circles came up plain). Every pill and icon URL now points at this tag. Same code otherwise.
 - **v1.14.0**: thirteen more marks in the About hero circles, and fewer plain circles.
   - Awards Konpo holds (Awwwards, FWA, Red Dot, Webby, CSSDA, Clutch, Product Hunt) and more of the stack (Tailwind, shadcn/ui, TypeScript, GSAP, Material Design, Swift), as `assets/pills/icon-*.svg`, same white circle and hairline as the tool marks from 1.11.0.
   - Desktop gets all 13, tablets the 7 awards, phones the first 4 (Awwwards, FWA, Red Dot, Webby). The plain circles go from 21/14/5 to 8/7/2 (desktop/tablet/phone), so the hero stops looking like empty bubbles.
