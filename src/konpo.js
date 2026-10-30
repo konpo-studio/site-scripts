@@ -1052,13 +1052,18 @@ const mainScript = () => {
 
 
     const handleNav = {
+        // Splits the menu text into letters the first time the menu opens, not on load. Letter boxes read as "W o r k"
+        // to search engines (Google showed "W o r k Work" as sitelink names), and crawlers never open the menu.
         init: () => {
+            if (handleNav.done) return;
+            handleNav.done = true;
             const mainLink = new SplitText('.main-menu .menu-link-item', {...typeOpts.chars, charsClass: 'g-chars'});
             const smTxt = new SplitText('.sm-menu .menu-link-item', {...typeOpts.chars, charsClass: 'g-chars'});
             const mainCtcLabel = new SplitText('.menu-bot-label', {...typeOpts.chars, charsClass: 'g-chars'});
             const mainCtcLink = new SplitText('.menu-bot-link', {...typeOpts.chars, charsClass: 'g-chars'});
         },
         open: () => {
+            handleNav.init()
             $('.header-toggle').addClass('active')
             if ($('.nav').hasClass('hidden')) {
                 $('.nav').removeClass('hidden')
@@ -1177,7 +1182,6 @@ const mainScript = () => {
             gsap.set('.header', {'mix-blend-mode': 'difference', 'filter': 'invert(1)'})
         }, 300);
     }
-    handleNav.init()
     $('.header-toggle').on('click', function(e) {
         e.preventDefault()
         if ($('.nav').hasClass('active')) {
