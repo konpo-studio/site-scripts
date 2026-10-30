@@ -516,6 +516,12 @@
         };
         fit();
         addEventListener('resize', fit); // registered before the grid's own resize, so that one measures the new size
+        // fit only lets go of the old hero on a resize, so the next pointer move or scroll after Barba takes the page away does it
+        const letGo = () => {
+            if (wrap.isConnected) return;
+            removeEventListener('resize', fit); removeEventListener('pointermove', letGo); removeEventListener('scroll', letGo);
+        };
+        addEventListener('pointermove', letGo, {passive: true}); addEventListener('scroll', letGo, {passive: true});
         const grid = window.kpDotGrid(canvas, Object.assign({
             rgb: { x: '46', y: '46', z: '46' },
             // the sub copy by its letters (a padded box would cut into the rows above the cards), its globe as a box; the wave

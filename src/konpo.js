@@ -1948,6 +1948,7 @@ const mainScript = () => {
                 }
                 if ($('[data-move="wrap"]').find('[data-move="inner"]')) {
                     function mousMove() {
+                        if (pageGone(el)) return;
                         let iconsX = xGetter(el.querySelector('[data-move="inner"]'));
                         let targetX;
                         if ($(el).is(':hover')) {
@@ -3220,6 +3221,27 @@ const mainScript = () => {
     // they start 0.9s sooner. A direct visit keeps the loader's timing.
     let pageChanged = false;
     const afterCurtain = (d) => curtain.quick && pageChanged ? Math.max(0, d - .9) : d;
+    // 1.16.2: the per-page frame loops (title mouse-follow, About awards and testimonial thumbs, case-study intro toggle and
+    // testimonial cursor, services testimonial thumbs) never stopped, so every visit left another set running and holding the
+    // old page (idle on Home after 16 page changes: ~2700 frame callbacks a second against ~420 fresh). Each loop now checks
+    // this and stops once its page has been in the document and left it.
+    function pageGone(el) {
+        if (el && el.isConnected) { el.__kpOn = 1; return false }
+        return !!(el && el.__kpOn)
+    }
+    // After each page change: kill the animations whose elements all belong to the page just left (the endless services and
+    // About team marquees kept animating it, the About one starting a new tween every frame) and destroy its swipers (the
+    // About gallery's document listeners kept the old page).
+    function killOldPageAnimations(container) {
+        if (!container || !window.gsap) return;
+        gsap.globalTimeline.getChildren(false, true, true).forEach(anim => {
+            const els = (anim.getChildren ? anim.getChildren(true, true, false) : [anim]).flatMap(t => t.targets()).filter(t => t && t.nodeType === 1);
+            if (els.length && els.every(el => container.contains(el))) anim.kill();
+        })
+        container.querySelectorAll('.swiper-initialized').forEach(el => {
+            try { if (el.swiper) el.swiper.destroy(true, false) } catch (e) {}
+        })
+    }
     function transitionLeave(data) {
         pageChanged = true
         if (!transGrid) {
@@ -3767,11 +3789,13 @@ const mainScript = () => {
                 $('.home-hero-client-item-inner').on('click', function(e) {
                     openModal(e, this)
                 })
-                $('.client-news-overlay').on('click', function(e) {
+                // The news popups live outside the page, so each Home visit used to add another pair of close handlers (each
+                // holding that visit's page); the namespace swaps the old pair out.
+                $('.client-news-overlay').off('click.kpNews').on('click.kpNews', function(e) {
                     e.preventDefault();
                     closeModal()
                 })
-                $('.client-news-label-hide').on('click', function(e) {
+                $('.client-news-label-hide').off('click.kpNews').on('click.kpNews', function(e) {
                     e.preventDefault();
                     closeModal()
                 })
@@ -4671,16 +4695,23 @@ const mainScript = () => {
                     }
                     // starts once the page change has settled (the curtain is up by ~2.3s after this runs)
                     setTimeout(() => idle(work, {timeout: 2000}), 2500);
-                    ScrollTrigger.batch(awardRows, {
-                        start: 'top bottom-=8%', once: true,
-                        onEnter: (batch) => {
-                            prepRows(batch);
-                            batch.forEach((el, i) => {
-                                const at = i * Math.min(.08, .6 / batch.length);
-                                el._kpCells.forEach((chars, k) => gsap.to(chars, {yPercent: 0, autoAlpha: 1, stagger: 0.01, duration: .4, ease: gOpts.ease, delay: at + k * .1}));
-                            })
+                    // 1.16.2: rows that scroll in within 0.1s of each other reveal as one batch. This replaced ScrollTrigger.batch,
+                    // whose paused delayedCall stayed in GSAP's global timeline and kept every About visit's page.
+                    const revealRows = (batch) => {
+                        prepRows(batch);
+                        batch.forEach((el, i) => {
+                            const at = i * Math.min(.08, .6 / batch.length);
+                            el._kpCells.forEach((chars, k) => gsap.to(chars, {yPercent: 0, autoAlpha: 1, stagger: 0.01, duration: .4, ease: gOpts.ease, delay: at + k * .1}));
+                        })
+                    }
+                    let entered = [], batchTimer = 0;
+                    awardRows.forEach(el => ScrollTrigger.create({
+                        trigger: el, start: 'top bottom-=8%', once: true,
+                        onEnter: () => {
+                            entered.push(el);
+                            if (!batchTimer) batchTimer = setTimeout(() => { batchTimer = 0; const batch = entered; entered = []; revealRows(batch) }, 100);
                         }
-                    })
+                    }))
                     const items = $(data.next.container).find('.abt-award-main-cms .abt-award-main-item')
                     const thumbs = $(data.next.container).find('.abt-award-thumb-cms')
                     $(data.next.container).find('.abt-award-main-cms .abt-award-main-item').on('pointerenter', function(e) {
@@ -4694,6 +4725,7 @@ const mainScript = () => {
                     let currIdx;
                     const awardWrap = $(data.next.container).find('.abt-award').get(0);
                     function initImgMove() {
+                        if (pageGone(data.next.container)) return;
                         // Everything below only acts while the pointer is over the awards, so skip the per-frame lookups until then.
                         if (!(awardWrap && awardWrap.matches(':hover'))) { requestAnimationFrame(initImgMove); return }
                         let parent = $(data.next.container).find('.abt-award-main-cms');
@@ -4851,6 +4883,7 @@ const mainScript = () => {
                     })
                     const testiWrap = $(data.next.container).find('.abt-testi').get(0);
                     function initThumbMove() {
+                        if (pageGone(data.next.container)) return;
                         // Everything below only acts while the pointer is over the testimonials, so skip the per-frame lookups until then.
                         if (testiWrap && testiWrap.matches(':hover')) {
                         let wrap = $(data.next.container).find('.abt-testi-thumb-wrap')
@@ -5042,6 +5075,7 @@ const mainScript = () => {
                     return xCord && yCord
                 }
                 function toggleMove() {
+                    if (pageGone(data.next.container)) return;
                     let cursorX = xGetter($(data.next.container).find('.projdtl-intro-toggle').get(0))
                     let cursorY = yGetter($(data.next.container).find('.projdtl-intro-toggle').get(0))
                     if ($(data.next.container).find('.projdtl-intro-toggle').hasClass('active')) {
@@ -5332,6 +5366,7 @@ const mainScript = () => {
                 const wrapper = $(data.next.container).get(0).querySelector('.projdtl-testi .projdtl-testi-main-wrap');
                 const target = wrapper.querySelector('.projdtl-testi-cursor');
                 function mouseInit() {
+                    if (pageGone(data.next.container)) return;
                     if ($(wrapper).is(':hover')) {
                         $(target).addClass('hovering');
                     } else {
@@ -5852,6 +5887,7 @@ const mainScript = () => {
                         thumbItems.removeClass('active')
                     })
                     function initThumbMove() {
+                        if (pageGone(data.next.container)) return;
                         let wrap = $(data.next.container).find('.ser-testi-thumb-wrap')
                         let target = $(data.next.container).find('.ser-testi-thumb-cms')
                         let xThumb = xGetter(target.get(0))
@@ -6492,6 +6528,7 @@ const mainScript = () => {
         SCRIPT.playgroundScript,
         SCRIPT.adsScript
     ]
+    barba.hooks.after((data) => killOldPageAnimations(data.current && data.current.container))
     barba.init({
         preventRunning: true,
         timeout: 10000,
