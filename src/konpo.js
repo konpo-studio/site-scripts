@@ -3808,15 +3808,17 @@ const mainScript = () => {
                     //     video.play()
                     // })
                 }
+                // These address changes keep history.state: it is Barba's record of the visit, and replacing it with {} made a
+                // later Back throw inside Barba, leaving the previous page on screen under this page's address.
                 function closeModal() {
-                    history.replaceState({},'',window.location.pathname)
+                    history.replaceState(history.state,'',window.location.pathname)
                     $('.client-news-wrap').removeClass('active')
                     lenis.start()
                 }
                 function openModal(e ,el) {
                     let elId = $(el).attr('data-news-id');
                     if (elId) {
-                        history.replaceState({},'',`?news=${elId}`)
+                        history.replaceState(history.state,'',`?news=${elId}`)
                     }
                     let elUrl = $(el).attr('href');
                     let hasDetail = elUrl != '#' && elUrl != '' || elUrl.includes('work')
@@ -4467,8 +4469,10 @@ const mainScript = () => {
                     allItems.each((idx, el) => {
                         $(el).after(MemberCloneItem.clone())
                     })
+                    // On a page change the header progress is rebuilt only once the curtain lifts, so the old page's
+                    // trigger may already be gone here
                     requestAnimationFrame(() => {
-                        if ($(window).width() > 991) {
+                        if ($(window).width() > 991 && headerProgTl && headerProgTl.scrollTrigger) {
                             headerProgTl.scrollTrigger.refresh()
                         }
                     })
@@ -4967,10 +4971,11 @@ const mainScript = () => {
                     e.preventDefault();
                     let val = $(this).data('proj-step');
                     let target = $(`[data-proj-section="${val}"]:not(".w-condition-invisible")`).get(0);
+                    // history.state is Barba's record of the visit; keep it (see closeModal on Home)
                     if (val != 0) {
-                        history.replaceState({},'',`#sc${val}`)
+                        history.replaceState(history.state,'',`#sc${val}`)
                     } else {
-                        history.replaceState({},'','#')
+                        history.replaceState(history.state,'','#')
                     }
                     lenis.scrollTo(target, {
                         offset: parseRem(200) * -1,
@@ -5758,7 +5763,7 @@ const mainScript = () => {
                             })
                             tl.to('.ser-proj-list', {x: - distance, ease: 'none'})
                         }
-                        if ($(window).width() > 991) {
+                        if ($(window).width() > 991 && headerProgTl && headerProgTl.scrollTrigger) {
                             headerProgTl.scrollTrigger.refresh()
                         }
                         $(window).trigger('resize')
@@ -6082,7 +6087,7 @@ const mainScript = () => {
                         $(el).removeClass('load-hidden');
                         $(el).slideDown('slow', () => {
                             gsap.set(el, {clearProps: 'all'})
-                            if ($(window).width() > 991) {
+                            if ($(window).width() > 991 && headerProgTl && headerProgTl.scrollTrigger) {
                                 headerProgTl.scrollTrigger.refresh()
                             }
                         })
