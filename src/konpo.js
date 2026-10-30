@@ -8,6 +8,8 @@
 //   Without the attribute: on on staging (*.webflow.io), off on konpo.studio.
 //   data-dotmorph="on" the About pillar icons and service-page feature icons morph into each other on the panel's dot grid
 //   as you scroll (src/dotmorph.js); "off" today's crossfade. Without the attribute: on on staging, off on konpo.studio.
+//   data-curtain="quick" the page-change curtain starts on the click and lifts sooner (about 2.5s instead of 4.2s);
+//   "classic" the original timings. Without the attribute: quick on staging, classic on konpo.studio.
 // e.g. https://www.konpo.studio/about?smooth-scroll=on&headlines=reveal shows the old behaviour without republishing.
 (function kpOptions() {
     function opt(name, fallback) {
@@ -21,7 +23,8 @@
     window.kpOpts = {smoothScroll: opt('smooth-scroll', 'off') === 'on', headlines: opt('headlines', 'gradient'),
         dotgrid: opt('dotgrid', /\.webflow\.io$/.test(location.hostname) ? 'new' : 'old'),
         herodots: opt('herodots', /\.webflow\.io$/.test(location.hostname) ? 'on' : 'off'),
-        dotmorph: opt('dotmorph', /\.webflow\.io$/.test(location.hostname) ? 'on' : 'off')};
+        dotmorph: opt('dotmorph', /\.webflow\.io$/.test(location.hostname) ? 'on' : 'off'),
+        curtain: opt('curtain', /\.webflow\.io$/.test(location.hostname) ? 'quick' : 'classic')};
     if (!window.kpOpts.smoothScroll) {
         const style = document.createElement('style');
         // Lenis's own CSS only sets this in smooth mode; popups still shouldn't hand their scroll on to the page
@@ -3205,7 +3208,20 @@ const mainScript = () => {
             }
         }
     }
+    // Page-change curtain timings (s). Classic took ~1.8s to close and ~2.3s to lift, with the title held .6s on a closed
+    // curtain, so a page change ran ~4.2s; the page set-up in between is only ~0.1-0.8s. Quick (1.16.0, Jean: "avoid the page
+    // transition animation hanging for too long") starts on the click (with a softer ease, so the dots show at once instead of
+    // after ~0.4s), runs the dots and letters faster and lifts right after the set-up: ~1.2s to close, ~1.1s to lift.
+    const curtain = window.kpOpts.curtain === 'quick'
+        ? {quick: true, delay: 0, close: 'power3.in', dots: .6, dotsEach: .015, title: .35, titleEach: .025, titleAt: '>-.3', hold: .15, out: .3, outEach: .02, liftAt: '<.2'}
+        : {quick: false, delay: .2, close: 'expo.in', dots: .8, dotsEach: .02, title: .4, titleEach: .04, titleAt: '>=-.4', hold: .6, out: .4, outEach: .04, liftAt: '<=.4'};
+    // Page entrances that wait for the curtain (About hero 2.5s, Work 2.2s and 3.5s, Playground 2s, counted from the page set-up)
+    // were timed to the classic curtain, which clears ~2.1s after the set-up. The quick one clears at ~1.2s, so after a page change
+    // they start 0.9s sooner. A direct visit keeps the loader's timing.
+    let pageChanged = false;
+    const afterCurtain = (d) => curtain.quick && pageChanged ? Math.max(0, d - .9) : d;
     function transitionLeave(data) {
+        pageChanged = true
         if (!transGrid) {
             transGrid = new transitionGrid()
         }
@@ -3253,14 +3269,14 @@ const mainScript = () => {
             gsap.set(title.chars, {yPercent: 60, autoAlpha: 0})
             gsap.set('.trans-title-wrap', {autoAlpha: 1})
             let tl = gsap.timeline({
-                delay: .2,
+                delay: curtain.delay,
                 onComplete: () => {
                     gsap.set(data.next.container, { clearProps: 'display' })
                 }
             })
             tl
-            .to(transGrid.getDots(), {'--radius': `${transGrid.getRadius() * .75}px`, duration: .8, opacity: 1, stagger:{from: 'center', grid: [transGrid.getAmount().x, transGrid.getAmount().y], each: -0.02}, ease: 'expo.in' })
-            .to(title.chars, {yPercent: 0, autoAlpha: 1, duration: .4, stagger: 0.04, ease: gOpts.ease}, '>=-.4')
+            .to(transGrid.getDots(), {'--radius': `${transGrid.getRadius() * .75}px`, duration: curtain.dots, opacity: 1, stagger:{from: 'center', grid: [transGrid.getAmount().x, transGrid.getAmount().y], each: -curtain.dotsEach}, ease: curtain.close })
+            .to(title.chars, {yPercent: 0, autoAlpha: 1, duration: curtain.title, stagger: curtain.titleEach, ease: gOpts.ease}, curtain.titleAt)
             return tl
         }
     }
@@ -3273,14 +3289,14 @@ const mainScript = () => {
         } else {
             gsap.set(data.current.container, {opacity: 0, display: 'none'})
             let tl = gsap.timeline({
-                delay: .6,
+                delay: curtain.hold,
                 onComplete: () => {
                     lenis.start()
                 }
             })
             tl
-            .to('.trans-title .g-chars', {autoAlpha: 0, yPercent: -60, duration: .4, stagger: 0.04, ease: gOpts.ease})
-            .to(transGrid.getDots(), {'--radius': '0px', duration: .8, stagger:{from: 'center',  grid: [transGrid.getAmount().x, transGrid.getAmount().y], each: 0.02}, ease: 'expo.out'}, '<=.4')
+            .to('.trans-title .g-chars', {autoAlpha: 0, yPercent: -60, duration: curtain.out, stagger: curtain.outEach, ease: gOpts.ease})
+            .to(transGrid.getDots(), {'--radius': '0px', duration: curtain.dots, stagger:{from: 'center',  grid: [transGrid.getAmount().x, transGrid.getAmount().y], each: curtain.dotsEach}, ease: 'expo.out'}, curtain.liftAt)
             return tl
         }
     }
@@ -4250,7 +4266,7 @@ const mainScript = () => {
                             trigger: '.abt-hero',
                             start: 'top bottom',
                         },
-                        delay: 2.5,
+                        delay: afterCurtain(2.5),
                         onComplete: () => {
                             titleTxt.revert()
                             new SplitText('.abt-hero-title', typeOpts.lines)
@@ -6099,7 +6115,7 @@ const mainScript = () => {
                             abtTxt.revert()
                             filterLabelTxt.revert()
                         },
-                        delay: 2.2
+                        delay: afterCurtain(2.2)
                     })
                     tl
                     .to(headTxt.chars, {yPercent: 0, autoAlpha: 1, stagger: .03, ease: gOpts.ease, duration: .8})
@@ -6135,7 +6151,7 @@ const mainScript = () => {
                         let subTxt = new SplitText($(el).find('.projlist-main-item-sub'), typeOpts.words);
 
                         let tl = gsap.timeline({
-                            delay: 3.5,
+                            delay: afterCurtain(3.5),
                             onComplete: () => {
                                 titleTxt.revert()
                                 subTxt.revert()
@@ -6431,7 +6447,7 @@ const mainScript = () => {
 
                     requestAnimationFrame(() => {
                         let tlAnim = gsap.timeline({
-                            delay: 2
+                            delay: afterCurtain(2)
                         })
                         tlAnim
                         .from(allCols.eq(0).find('.playg-main-item'), {yPercent: -65, autoAlpha: 0, duration: 1.4, ease: 'power2.out', stagger: -0.1, clearProps: 'all'})
