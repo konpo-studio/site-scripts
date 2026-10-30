@@ -2114,6 +2114,9 @@ const mainScript = () => {
             this.Body = Matter.Body;
 
             this.engine = this.Engine.create();
+            // More solver passes, so pills pressed together or into an edge settle instead of jittering.
+            this.engine.positionIterations = 10;
+            this.engine.velocityIterations = 8;
             this.world = this.engine.world;
 
             this.thickness = 3000000;
@@ -2275,9 +2278,11 @@ const mainScript = () => {
         }
 
         boundry(x, y, w, h) {
+            // The edges have no bounce of their own. A pair bounces with the larger restitution of the two, so at 0.9 a pill
+            // pushed into an edge sprang back almost at full speed and shook there (Jean, 2026-10-30); the pills' own 0.4 applies now.
             let body = this.Bodies.rectangle(x, y, w, h, {
                 friction: 0.3,
-                restitution: 0.9,
+                restitution: 0,
                 isStatic: true,
                 render: {
                     fillStyle: 'transparent',
@@ -2466,11 +2471,74 @@ const mainScript = () => {
             });
             this.World.add(this.world, mouseConstraint);
             this.render.mouse = mouse;
+            // Dragging to an edge: the mouse was only read over the canvas, so a pill dragged past an edge kept being pulled into
+            // the wall (it shook there), and a release outside the canvas never arrived (the pill stayed on the pointer). While a
+            // pill is held the pointer is read on the whole page, a release anywhere drops it, and the point it's pulled to is kept
+            // where the whole pill stays inside the box.
+            const move = (e) => { if (mouseConstraint.body) mouse.mousemove(e) };
+            const up = (e) => { if (mouse.button === 0) mouse.mouseup(e) };
+            const drop = () => { mouse.button = -1 };
+            window.addEventListener('mousemove', move);
+            window.addEventListener('mouseup', up);
+            window.addEventListener('blur', drop);
+            this.unbind = () => {
+                window.removeEventListener('mousemove', move);
+                window.removeEventListener('mouseup', up);
+                window.removeEventListener('blur', drop);
+            };
+            const pull = { x: 0, y: 0 };
+            const clamp = (v, lo, hi) => lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v));
+            const inset = this.thickness / 2 - this.hideGr; // the walls' inner faces sit this far inside the canvas
+            // runs after the mouse constraint's own update, which points the constraint at the mouse
+            this.Events.on(this.engine, 'beforeUpdate', () => {
+                const body = mouseConstraint.body, c = mouseConstraint.constraint;
+                if (!body || !c.pointB) return;
+                const gx = body.position.x + c.pointB.x, gy = body.position.y + c.pointB.y, b = body.bounds;
+                pull.x = clamp(mouse.position.x, inset + gx - b.min.x, this.canvasSize.width - inset - (b.max.x - gx));
+                pull.y = clamp(mouse.position.y, inset + gy - b.min.y, this.canvasSize.height - inset - (b.max.y - gy));
+                c.pointA = pull;
+            });
+            // Touch: Matter cancels every touch on the canvas, so on phones a swipe that started on the bubbles (the top ~40% of
+            // the first screen) never scrolled the page. Now an up or down swipe scrolls, and a pill is picked up when the finger
+            // first moves sideways; after that it follows the finger in any direction.
+            const cv = this.render.canvas;
+            cv.removeEventListener('touchstart', mouse.mousedown);
+            cv.removeEventListener('touchmove', mouse.mousemove);
+            cv.removeEventListener('touchend', mouse.mouseup);
+            cv.style.touchAction = 'pan-y pinch-zoom';
+            const touch = (t) => ({ changedTouches: [t], preventDefault() {} });
+            let start = null, dragging = false;
+            cv.addEventListener('touchstart', (e) => { start = e.touches.length === 1 ? e.touches[0] : null; dragging = false; }, { passive: true });
+            cv.addEventListener('touchmove', (e) => {
+                const t = e.touches[0];
+                if (!dragging) {
+                    if (!start || !t) return;
+                    const dx = Math.abs(t.clientX - start.clientX), dy = Math.abs(t.clientY - start.clientY);
+                    if (dx + dy < 4) return;
+                    if (dy >= dx) { start = null; return; } // the page scrolls
+                    dragging = true;
+                    mouse.mousedown(touch(start)); // grabs whatever is under the spot the finger started on
+                } else {
+                    mouse.mousemove(touch(t));
+                }
+                if (e.cancelable) e.preventDefault();
+            }, { passive: false });
+            const end = (e) => { if (dragging) mouse.mouseup(touch(e.changedTouches[0])); dragging = false; start = null; };
+            cv.addEventListener('touchend', end, { passive: true });
+            cv.addEventListener('touchcancel', end, { passive: true });
         }
         startAnim() {
             const canvas = document.querySelector('.abt-decor-canvas');
             if (canvas) {
-                this.Engine.update(this.engine, 1000 / 60)
+                // Steps of 1/120s, as many as the time that passed: one 1/60s step per frame ran the pile twice as fast on 120Hz
+                // screens, and the bigger steps let pills sink into each other and the edges, which showed as jitter.
+                const now = performance.now(), step = 1000 / 120;
+                this.lag = Math.min((this.lag || 0) + (this.last ? now - this.last : 1000 / 60), step * 6);
+                this.last = now;
+                while (this.lag >= step) {
+                    this.Engine.update(this.engine, step);
+                    this.lag -= step;
+                }
                 // The physics keeps stepping every frame (same positions); drawing is skipped while the canvas is 200px+ off screen.
                 if (!canvas.__kpOff) this.Render.world(this.render);
                 if (!canvas.__kpIO) {
@@ -4171,6 +4239,7 @@ const mainScript = () => {
             if ($('.abt-decor-canvas').length) {
                 physicalEngine = new physical('.abt-decor-canvas')
                 physicalEngine.startAnim()
+                SCRIPT.abtScript.physics = physicalEngine
             }
             function abtHero(data) {
                 if ($(window).width() >= 768) {
@@ -4809,7 +4878,11 @@ const mainScript = () => {
             abtFaq(data)
         },
         beforeLeave() {
-            physicalEngine.destroy()
+            // physicalEngine is afterEnter's, so this used to throw (silently, inside Barba) on every page change away from About.
+            // Only the page-wide listeners go here: the canvas stays drawn under the curtain and its loop ends when the page is gone.
+            const physics = SCRIPT.abtScript.physics;
+            if (physics && physics.unbind) physics.unbind();
+            SCRIPT.abtScript.physics = null;
         },
     }
     SCRIPT.projDtlScript = {
