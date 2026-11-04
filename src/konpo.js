@@ -722,6 +722,7 @@ function kpNativeVelocity(lenis) {
                 // the section you're in shows its icon, the rest stay dots (a quote's photo counts as the section it sits in)
                 let open = cur;
                 while (open > 0 && R.onS[open].photo) open--;
+                R.open = open;
                 R.on.forEach((m, i) => m.classList.toggle('kp-open', i === open));
             }
         }
@@ -730,10 +731,11 @@ function kpNativeVelocity(lenis) {
         R.ring.style.translate = R.hz ? f + 'px 0' : '0 ' + f + 'px';
         R.rail.style.setProperty('--kp-y', f + 'px');
         R.rail.style.setProperty('--kp-h', f + 'px');
-        // the ring travels the line between stops and turns into the icon (or the photo) it reaches
+        // the ring travels the line between stops and turns into the icon (or the photo) it reaches; with dots, a section's dot
+        // only opens once its section starts, so until then the ring sits on it (one icon open at a time)
         let near = false;
         R.on.forEach((m, i) => {
-            const here = Math.abs(pos[i] - f) < NEAR;
+            const here = Math.abs(pos[i] - f) < NEAR && !(R.dots && !R.onS[i].photo && i !== R.open);
             near = near || here;
             m.classList.toggle('here', here);
         });
