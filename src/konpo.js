@@ -10,6 +10,9 @@
 //   as you scroll (src/dotmorph.js); "off" today's crossfade. Without the attribute: on on staging, off on konpo.studio.
 //   data-curtain="quick" the page-change curtain starts on the click and lifts sooner (about 2.5s instead of 4.2s);
 //   "classic" the original timings. Without the attribute: quick on staging, classic on konpo.studio.
+//   data-raildots="on" on First Chair, the rail's section icons sit as small dots and open into their icon while you're in
+//   that section (the quote photos stay as they are); "off" every icon shows. Without the attribute: on on staging, off on
+//   konpo.studio.
 // e.g. https://www.konpo.studio/about?smooth-scroll=on&headlines=reveal shows the old behaviour without republishing.
 (function kpOptions() {
     function opt(name, fallback) {
@@ -24,7 +27,8 @@
         dotgrid: opt('dotgrid', /\.webflow\.io$/.test(location.hostname) ? 'new' : 'old'),
         herodots: opt('herodots', /\.webflow\.io$/.test(location.hostname) ? 'on' : 'off'),
         dotmorph: opt('dotmorph', /\.webflow\.io$/.test(location.hostname) ? 'on' : 'off'),
-        curtain: opt('curtain', /\.webflow\.io$/.test(location.hostname) ? 'quick' : 'classic')};
+        curtain: opt('curtain', /\.webflow\.io$/.test(location.hostname) ? 'quick' : 'classic'),
+        raildots: opt('raildots', /\.webflow\.io$/.test(location.hostname) ? 'on' : 'off')};
     if (!window.kpOpts.smoothScroll) {
         const style = document.createElement('style');
         // Lenis's own CSS only sets this in smooth mode; popups still shouldn't hand their scroll on to the page
@@ -228,9 +232,10 @@ function kpNativeVelocity(lenis) {
     if (!doc.querySelector('.header')) return;
     // current case studies; a logo only where the site has a clean vector one (the header blends, so it's drawn in black)
     const CASES = {
-        // quotes: the people whose pull quotes get their own stop (their photo), after the section they're in
+        // quotes: the people whose pull quotes get their own stop (their photo), after the section they're in; dots: section icons
+    // stay small dots until you're in their section (with the data-raildots switch)
         'first-chair': {logo: 'https://cdn.prod.website-files.com/65544f28fc8e963bc080b6f4/6ade7ed7d5dec69f065e9a43_first-chair-wordmark.svg', w: 298, h: 51,
-            quotes: ['Sunny Fassler', 'Sivan Hurvitz', 'Jean Massad']},
+            quotes: ['Sunny Fassler', 'Sivan Hurvitz', 'Jean Massad'], dots: 1},
         'surge-ai': {logo: 'https://cdn.prod.website-files.com/65544f28fc8e963bc080b6f4/6ade86a0d308557e57877a77_surge-wordmark.svg', w: 71, h: 23, big: 1},
         'fyler-search-engine': {}, 'clinical-ink': {}, 'relias': {}
     };
@@ -272,6 +277,8 @@ function kpNativeVelocity(lenis) {
     // NEAR: how close the ring gets before it turns into a stop; EDGE: where the line stops short of a stop (its half box + 3px);
     // STEP: the spacing the rail grows to fit; extra stops (quotes) drop out where they'd sit closer than MIN
     const NARROW = 992, NEAR = 14, EDGE = 14, STEP = 38, MIN = 34;
+    // where the line stops short of a stop that's a dot (its 2px radius + 4px)
+    const DOT_EDGE = 6;
     // The header is drawn with invert + difference, so its colours are written for that: white shows as the page, black as
     // ink. The bottom bar draws its rail the same way, so both use these. The greys are the lab-approved rail colours.
     const css =
@@ -304,6 +311,20 @@ function kpNativeVelocity(lenis) {
         '.kp-rr::after{content:"";width:4px;height:4px;border-radius:50%;background:#202020}' +
         '.kp-rr.gone{opacity:0;transform:scale(.6)}' +
         '.kp-ri:focus-visible,.kp-ra:focus-visible{outline:1px solid #202020;outline-offset:1px}' +
+        // dots (First Chair): a section's icon sits as a small dot and opens into its shape while you're in that section (or as
+        // the ring reaches it). A plate in the page colour behind each one covers the line to 3px short of the box, so the
+        // line can run close to a dot and still clears an open icon
+        '.kp-dots .kp-ri{background:none}' +
+        '.kp-dots .kp-ri::before{content:"";position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:5px;' +
+        'background:#fff;transition:width .35s cubic-bezier(.2,.7,.2,1),height .35s cubic-bezier(.2,.7,.2,1),margin .35s cubic-bezier(.2,.7,.2,1)}' +
+        '.kp-dots .kp-ri.kp-open::before,.kp-dots .kp-ri.here::before{width:28px;height:28px;margin:-14px 0 0 -14px}' +
+        '.kp-dots .kp-ri svg{position:relative}' +
+        '.kp-dots .kp-ri circle{transform-box:fill-box;transform-origin:center;' +
+        'transition:fill .35s ease var(--d,0s),fill-opacity .35s ease var(--d,0s),transform .35s cubic-bezier(.2,.7,.2,1) var(--d,0s)}' +
+        '.kp-dots .kp-ri:not(.kp-open):not(.here) circle{transform:scale(0)}' +
+        '.kp-dots .kp-ri:not(.kp-open):not(.here) circle:nth-child(13){transform:scale(1.4);fill:#bdbbc1;fill-opacity:1}' +
+        '@media (hover:hover){.kp-dots .kp-ri:not(.kp-open):not(.here):hover circle:nth-child(13){fill:var(--purple)}}' +
+        '.kp-dots .kp-ri:not(.kp-open):not(.here):focus-visible circle:nth-child(13){fill:var(--purple)}' +
         // below 992px: the bar (the page colour, the nav's line on top); its inside blends like the header
         '.kp-bar{position:fixed;left:0;right:0;bottom:0;height:44px;padding-bottom:env(safe-area-inset-bottom);box-sizing:content-box;' +
         'z-index:900;background:var(--body-bg);transform:translateY(110%);visibility:hidden;' +
@@ -532,6 +553,8 @@ function kpNativeVelocity(lenis) {
         rail.className = 'kp-rail';
         rail.setAttribute('role', 'navigation');
         rail.setAttribute('aria-label', p.cs ? 'Case study sections' : 'Page sections');
+        const dots = !!(p.cs && p.cs.dots) && window.kpOpts.raildots === 'on';
+        if (dots) rail.classList.add('kp-dots');
         const track = doc.createElement('div'), fill = doc.createElement('div'), ring = doc.createElement('div');
         track.className = 'kp-rail-track';
         fill.className = 'kp-rail-fill';
@@ -581,7 +604,7 @@ function kpNativeVelocity(lenis) {
                 bar.classList.toggle('on', on);
             };
         }
-        R = {rail, track, fill, ring, marks, stops, prog, side, bar, inner, mo, at: [], pos: [], f: -1, cur: -1, hz: false};
+        R = {rail, track, fill, ring, marks, stops, prog, side, bar, inner, mo, dots, at: [], pos: [], f: -1, cur: -1, hz: false};
         home();
         R.raf = 0;
         R.onScroll = () => {
@@ -649,6 +672,7 @@ function kpNativeVelocity(lenis) {
         const step = spread(on.length), n = on.length, max = Math.max(0, root.scrollHeight - innerHeight - 2), gap = innerHeight * .2;
         R.marks.forEach((m, i) => m.classList.toggle('kp-off', on.indexOf(i) < 0));
         R.on = on.map(i => R.marks[i]);
+        R.onS = on.map(i => R.stops[i]);
         R.pos = on.map((x, i) => 11 + i * step);
         const raw = on.map(i => {
             const s = R.stops[i], h = s.el.offsetHeight;
@@ -664,7 +688,8 @@ function kpNativeVelocity(lenis) {
         R.pos.forEach((p, i) => { R.on[i].style.translate = hz ? p + 'px 0' : '0 ' + p + 'px'; });
         let g = '';
         for (let i = 0; i < n - 1; i++) {
-            const a = R.pos[i] + EDGE, z = R.pos[i + 1] - EDGE;
+            const edge = j => R.dots && !R.onS[j].photo ? DOT_EDGE : EDGE;
+            const a = R.pos[i] + edge(i), z = R.pos[i + 1] - edge(i + 1);
             if (z > a) g += ',transparent ' + a + 'px,var(--kp-c) ' + a + 'px ' + z + 'px,transparent ' + z + 'px';
         }
         const bg = g ? 'linear-gradient(' + (hz ? 'to right' : 'to bottom') + ',transparent 0' + g + ')' : 'none';
@@ -693,6 +718,12 @@ function kpNativeVelocity(lenis) {
             R.cur = cur;
             R.marks.forEach(m => m.removeAttribute('aria-current'));
             R.on[cur].setAttribute('aria-current', 'step');
+            if (R.dots) {
+                // the section you're in shows its icon, the rest stay dots (a quote's photo counts as the section it sits in)
+                let open = cur;
+                while (open > 0 && R.onS[open].photo) open--;
+                R.on.forEach((m, i) => m.classList.toggle('kp-open', i === open));
+            }
         }
         if (f === R.f) return;
         R.f = f;
