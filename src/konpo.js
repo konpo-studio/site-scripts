@@ -10,9 +10,9 @@
 //   as you scroll (src/dotmorph.js); "off" today's crossfade. Without the attribute: on on staging, off on konpo.studio.
 //   data-curtain="quick" the page-change curtain starts on the click and lifts sooner (about 2.5s instead of 4.2s);
 //   "classic" the original timings. Without the attribute: quick on staging, classic on konpo.studio.
-//   data-raildots="on" on First Chair, the rail's section icons sit as small dots and open into their icon while you're in
-//   that section (the quote photos stay as they are); "off" every icon shows. Without the attribute: on on staging, off on
-//   konpo.studio.
+//   data-raildots="on" on every page rail (Home, About, the services, the AI design system page and the case studies), the
+//   section icons sit as small dots and open into their icon while you're in that section (quote and testimonial photos stay
+//   as they are); "off" every icon shows. Without the attribute: on on staging, off on konpo.studio.
 // e.g. https://www.konpo.studio/about?smooth-scroll=on&headlines=reveal shows the old behaviour without republishing.
 (function kpOptions() {
     function opt(name, fallback) {
@@ -232,10 +232,9 @@ function kpNativeVelocity(lenis) {
     if (!doc.querySelector('.header')) return;
     // current case studies; a logo only where the site has a clean vector one (the header blends, so it's drawn in black)
     const CASES = {
-        // quotes: the people whose pull quotes get their own stop (their photo), after the section they're in; dots: section icons
-    // stay small dots until you're in their section (with the data-raildots switch)
+        // quotes: the people whose pull quotes get their own stop (their photo), after the section they're in
         'first-chair': {logo: 'https://cdn.prod.website-files.com/65544f28fc8e963bc080b6f4/6ade7ed7d5dec69f065e9a43_first-chair-wordmark.svg', w: 298, h: 51,
-            quotes: ['Sunny Fassler', 'Sivan Hurvitz', 'Jean Massad'], dots: 1},
+            quotes: ['Sunny Fassler', 'Sivan Hurvitz', 'Jean Massad']},
         'surge-ai': {logo: 'https://cdn.prod.website-files.com/65544f28fc8e963bc080b6f4/6ade86a0d308557e57877a77_surge-wordmark.svg', w: 71, h: 23, big: 1},
         'fyler-search-engine': {}, 'clinical-ink': {}, 'relias': {}
     };
@@ -311,9 +310,9 @@ function kpNativeVelocity(lenis) {
         '.kp-rr::after{content:"";width:4px;height:4px;border-radius:50%;background:#202020}' +
         '.kp-rr.gone{opacity:0;transform:scale(.6)}' +
         '.kp-ri:focus-visible,.kp-ra:focus-visible{outline:1px solid #202020;outline-offset:1px}' +
-        // dots (First Chair): a section's icon sits as a small dot and opens into its shape while you're in that section (or as
-        // the ring reaches it). A plate in the page colour behind each one covers the line to 3px short of the box, so the
-        // line can run close to a dot and still clears an open icon
+        // dots (every rail, with the data-raildots switch): a section's icon sits as a small dot and opens into its shape while
+        // you're in that section (or as the ring reaches it). A plate in the page colour behind each one covers the line to 3px
+        // short of the box, so the line can run close to a dot and still clears an open icon
         '.kp-dots .kp-ri{background:none}' +
         '.kp-dots .kp-ri::before{content:"";position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:5px;' +
         'background:#fff;transition:width .35s cubic-bezier(.2,.7,.2,1),height .35s cubic-bezier(.2,.7,.2,1),margin .35s cubic-bezier(.2,.7,.2,1)}' +
@@ -517,17 +516,25 @@ function kpNativeVelocity(lenis) {
         return out;
     }
     // a jump's target is fixed when it starts, and media above the part can load in on the way and push it further down,
-    // so once the scroll settles, aim again (twice at most) until the part crosses the middle of the screen. Scrolling by
-    // hand calls it off
+    // so once the scroll settles, aim again (twice at most) until the part is the current one (crosses the middle of the
+    // screen). Scrolling by hand calls it off
     function go(s, tries) {
         const me = ++aim, L = window.kpLenis, hdr = (doc.querySelector('.header-top') || {}).offsetHeight || 0;
         const a = s.step != null && doc.querySelector('[data-proj-step="' + s.step + '"]');
         // case-study sections go through the header list, which also sets the address (#scN)
         if (a && window.jQuery) jQuery(a).trigger('click');
         else {
-            const to = s.top ? 0 : s.el, offset = s.top ? 0 : s.mid ? -Math.max(0, (innerHeight - s.el.offsetHeight) / 2) : -hdr;
-            if (L) L.scrollTo(to, {offset, immediate: reduce(), force: true});
-            else scrollTo({top: s.top ? 0 : s.el.getBoundingClientRect().top + scrollY + offset, behavior: reduce() ? 'auto' : 'smooth'});
+            const offset = s.top ? 0 : s.mid ? -Math.max(0, (innerHeight - s.el.offsetHeight) / 2) : -hdr;
+            let y = s.top ? 0 : s.el.getBoundingClientRect().top + scrollY + offset;
+            // a short part, or one near the end of the page, would land with the next part over mid-screen, which opens that
+            // part's stop instead: land halfway through the stretch of scrolling where this stop is the current one
+            const i = R && R.onS ? R.onS.indexOf(s) : -1;
+            if (i > -1 && R.at.length) {
+                const lo = R.at[i], hi = i < R.at.length - 1 ? R.at[i + 1] : Infinity;
+                if (!(y >= lo && y < hi)) y = hi === Infinity ? lo : (lo + hi) / 2;
+            }
+            if (L) L.scrollTo(y, {immediate: reduce(), force: true});
+            else scrollTo({top: y, behavior: reduce() ? 'auto' : 'smooth'});
         }
         let last = -1, still = 0;
         const t = setInterval(() => {
@@ -537,7 +544,9 @@ function kpNativeVelocity(lenis) {
             if (still < 3) return;
             clearInterval(t);
             const r = s.el.getBoundingClientRect(), end = scrollY >= root.scrollHeight - innerHeight - 2;
-            if (!s.top && !end && (r.top > innerHeight / 2 || r.bottom < innerHeight / 2) && (tries || 0) < 2) go(s, (tries || 0) + 1);
+            const i = !(a && window.jQuery) && R && R.onS ? R.onS.indexOf(s) : -1;
+            const miss = i > -1 ? R.cur !== i : r.top > innerHeight / 2 || r.bottom < innerHeight / 2;
+            if (!s.top && !end && miss && (tries || 0) < 2) go(s, (tries || 0) + 1);
         }, 120);
     }
     ['wheel', 'touchstart', 'keydown'].forEach(e => addEventListener(e, () => { aim++; }, {passive: true}));
@@ -553,7 +562,7 @@ function kpNativeVelocity(lenis) {
         rail.className = 'kp-rail';
         rail.setAttribute('role', 'navigation');
         rail.setAttribute('aria-label', p.cs ? 'Case study sections' : 'Page sections');
-        const dots = !!(p.cs && p.cs.dots) && window.kpOpts.raildots === 'on';
+        const dots = window.kpOpts.raildots === 'on';
         if (dots) rail.classList.add('kp-dots');
         const track = doc.createElement('div'), fill = doc.createElement('div'), ring = doc.createElement('div');
         track.className = 'kp-rail-track';
@@ -685,6 +694,9 @@ function kpNativeVelocity(lenis) {
             R.at[i] = Math.max(0, lim);
             lim -= gap;
         }
+        // parts that start in the top half of the first screen (a short hero on a phone) would be current from the very top, so
+        // the stop before them could never open: they share out the first stretch of scrolling the same way
+        for (let i = 1; i < n && R.at[i] <= R.at[i - 1]; i++) R.at[i] = R.at[i - 1] + gap;
         R.pos.forEach((p, i) => { R.on[i].style.translate = hz ? p + 'px 0' : '0 ' + p + 'px'; });
         let g = '';
         for (let i = 0; i < n - 1; i++) {
