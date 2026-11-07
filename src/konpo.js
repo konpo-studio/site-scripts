@@ -13,6 +13,8 @@
 //   data-raildots="on" on every page rail (Home, About, the services, the AI design system page and the case studies), the
 //   section icons sit as small dots and open into their icon while you're in that section (quote and testimonial photos stay
 //   as they are); "off" every icon shows. Without the attribute: on on staging, off on konpo.studio.
+//   data-serdots="on" Home's dots run on from the Services title, behind the service cards, to the Selected Work title as one
+//   field (serDots in src/dotgrid.js); "off" each title keeps its own grid. Without the attribute: on on staging, off on konpo.studio.
 // e.g. https://www.konpo.studio/about?smooth-scroll=on&headlines=reveal shows the old behaviour without republishing.
 (function kpOptions() {
     function opt(name, fallback) {
@@ -28,7 +30,8 @@
         herodots: opt('herodots', /\.webflow\.io$/.test(location.hostname) ? 'on' : 'off'),
         dotmorph: opt('dotmorph', /\.webflow\.io$/.test(location.hostname) ? 'on' : 'off'),
         curtain: opt('curtain', /\.webflow\.io$/.test(location.hostname) ? 'quick' : 'classic'),
-        raildots: opt('raildots', /\.webflow\.io$/.test(location.hostname) ? 'on' : 'off')};
+        raildots: opt('raildots', /\.webflow\.io$/.test(location.hostname) ? 'on' : 'off'),
+        serdots: opt('serdots', /\.webflow\.io$/.test(location.hostname) ? 'on' : 'off')};
     if (!window.kpOpts.smoothScroll) {
         const style = document.createElement('style');
         // Lenis's own CSS only sets this in smooth mode; popups still shouldn't hand their scroll on to the page

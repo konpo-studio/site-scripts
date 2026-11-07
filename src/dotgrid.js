@@ -59,7 +59,7 @@
         const o = Object.assign({ rgb: { x: '46', y: '46', z: '46' }, trail: 'frame', shape: 'cone', lens: 0, enter: 'follow', touch: false, reduce: false, click: 'off', tint: false, textRipple: 'off', text: null, hover: null,
             // protected text (all rem): margin with no dots, band where they grow back; resting grid 'all' or 'near' (within spot),
             // and with 'near' always on from restFrom's top edge down (the Home cards' gaps, where the old static pattern was)
-            protect: null, halo: 1.4, fade: 2.4, rest: 'all', spot: 26, restFrom: null, calm: false, relax: false, wrap: 0, repel: 0, hold: false }, opt);
+            protect: null, halo: 1.4, fade: 2.4, rest: 'all', spot: 26, restFrom: null, calm: false, relax: false, wrap: 0, repel: 0, hold: false, square: false }, opt);
         const stats = opt.stats; // the prototype's cost panel passes an object; on the site nothing is counted
         const size = parseRem(2), step = parseRem(20), pad = parseRem(1), top = size * 4.8;
         let cw, ch, kx, ky, rw, rh, sx, sy, ox, oy;
@@ -96,6 +96,9 @@
             rw = Math.ceil(cw / step) + 1; rh = Math.ceil(ch / step) + 1;
             sx = (cw - size) / (rw + pad); sy = (ch - size) / (rh + pad);
             ox = (cw / rw) * (pad / 2); oy = (ch / rh) * (pad / 2);
+            // square: rows as far apart as columns, the first half a row down, so two fields of the same width stacked on
+            // a whole number of rows read as one lattice (the Home Services field, 1.19.0)
+            if (o.square) { sy = sx; oy = sy / 2; rh = Math.ceil(ch / sy) }
             if (stats) stats.backing = canvas.width + '×' + canvas.height;
             if (o.protect && !held) mask();
             full = true; wake();
@@ -475,6 +478,7 @@
     const SITE = { trail: '120', shape: 'cone', lens: .2, enter: 'grow', click: 'ripple' };
     window.kpDotGridSite = function (canvas, rgb) {
         if (!canvas || !canvas.getContext || !window.kpOpts || window.kpOpts.dotgrid !== 'new') return false;
+        if (window.kpOpts.serdots === 'on' && serDots(canvas, rgb)) return true;
         const link = canvas.closest('a[href]');
         window.kpDotGrid(canvas, Object.assign({
             rgb, textRipple: 'enter',
@@ -483,6 +487,49 @@
         }, SITE));
         return true;
     };
+
+    // Home Services (konpo-min 1.19.0, the serdots switch: data-serdots on the konpo-min tag or ?serdots=on|off, else on on
+    // *.webflow.io and off on konpo.studio). Jean, 2026-11-07: the dots run on from the Services title down to the Selected
+    // Work title as one field, behind the service cards. The two titles' own grids give way to two fields, one at the back
+    // of each block (the blocks are separate stacking contexts with the page colour, and Selected Work sits over Services),
+    // the same width and on a square lattice, the Services one a whole number of rows tall, so the rows run on across the
+    // join. They share one hover box (both fields), so the bulge grows anywhere between the titles and shows round the cards.
+    function serDots(canvas, rgb) {
+        const sec = canvas.closest('.home-ser, .home-proj'), main = sec && sec.parentElement;
+        const ser = main && main.querySelector(':scope > .home-ser'), proj = main && main.querySelector(':scope > .home-proj');
+        if (!ser || !proj || ser.nextElementSibling !== proj || sec.querySelector(':scope > .kp-ser-dots')) return false;
+        const src = canvas.parentElement, isSer = sec === ser; // src: the title's grid box (.embed-svg), where the dots ran today
+        canvas.style.visibility = 'hidden';
+        const wrap = document.createElement('div'), c = document.createElement('canvas');
+        wrap.className = 'kp-ser-dots'; wrap.setAttribute('aria-hidden', 'true');
+        // above the block's page-colour background, under its content (the container is z-index 2, the cards inside it)
+        wrap.style.cssText = 'position:absolute;z-index:1;pointer-events:none';
+        c.style.cssText = 'display:block;width:100%';
+        wrap.appendChild(c); sec.insertBefore(wrap, sec.firstChild);
+        // the grid's column pitch for a width (the same sums as its resize), which is its row pitch too when square
+        const pitch = (w) => { const cw = Math.ceil(w), rw = Math.ceil(cw / parseRem(20)) + 1; return (cw - parseRem(2)) / (rw + parseRem(1)) };
+        let grid = null, ro = null;
+        const fit = () => {
+            if (!wrap.isConnected) { if (ro) ro.disconnect(); return }
+            const sr = sec.getBoundingClientRect(), br = src.getBoundingClientRect(), sy = pitch(br.width);
+            let top, h;
+            if (isSer) { const rows = Math.max(1, Math.round((sr.bottom - br.top) / sy)); h = rows * sy; top = sr.height - h } // from about where today's grid starts, down to the block's end
+            else { top = 0; h = br.bottom - sr.top } // from the block's top down to the end of today's grid
+            Object.assign(wrap.style, { left: (br.left - sr.left) + 'px', width: br.width + 'px', top: top + 'px', height: h + 'px' });
+            if (grid) grid.resize();
+        };
+        fit();
+        const box = { getBoundingClientRect: () => {
+            const r = [...main.querySelectorAll(':scope > .home-ser > .kp-ser-dots, :scope > .home-proj > .kp-ser-dots')].map(w => w.getBoundingClientRect());
+            const t = Math.min(...r.map(b => b.top)), b = Math.max(...r.map(b => b.bottom));
+            return { left: r[0].left, right: r[0].right, top: t, bottom: b, width: r[0].width, height: b - t };
+        } };
+        grid = window.kpDotGrid(c, Object.assign({ rgb, hover: box, square: true }, SITE));
+        // the blocks change height as their images and fonts land: refit (the grid's own resize listener covers the window)
+        ro = new ResizeObserver(fit); ro.observe(ser); ro.observe(proj);
+        c.kpDots = grid; // for checks from the console
+        return true;
+    }
 
     // Home hero (konpo-min 1.9.0, the herodots switch: data-herodots on the konpo-min tag or ?herodots=on|off, else on on
     // *.webflow.io and off on konpo.studio). The title grids' dots (SITE above) across the hero, from under the nav fill down
